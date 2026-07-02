@@ -49,6 +49,72 @@ const qualityConfig: Record<Quality, { scale: number; jpeg: number }> = {
 
 const marginPoints: Record<Margin, number> = { none: 0, narrow: 18, normal: 36 }
 
+const fontStacks = { sans: 'Arial, sans-serif', serif: 'Georgia, serif', mono: '"Courier New", monospace' }
+
+function drawTextOverlays(ctx: CanvasRenderingContext2D, page: DocumentPage, width: number, height: number, zIndex?: number) {
+  for (const overlay of page.textOverlays) {
+    if (zIndex !== undefined && overlay.zIndex !== zIndex) continue
+    const fontSize = Math.max(6, overlay.fontSize * width)
+    const lineHeight = fontSize * 1.25
+    const boxX = overlay.x * width, boxY = overlay.y * height
+    const boxWidth = overlay.width * width, boxHeight = overlay.height * height
+    const padding = (overlay.padding ?? 0) * width
+    const radius = Math.min((overlay.borderRadius ?? 0) * width, boxWidth / 2, boxHeight / 2)
+    ctx.save()
+    if (overlay.backgroundColor) {
+      ctx.globalAlpha = overlay.backgroundOpacity ?? 1
+      ctx.fillStyle = overlay.backgroundColor
+      ctx.beginPath(); ctx.roundRect(boxX, boxY, boxWidth, boxHeight, radius); ctx.fill()
+      ctx.globalAlpha = 1
+    }
+    ctx.beginPath(); ctx.rect(boxX, boxY, boxWidth, boxHeight); ctx.clip()
+    ctx.fillStyle = overlay.color
+    ctx.font = `${overlay.italic ? 'italic ' : ''}${overlay.bold ? '700 ' : '400 '}${fontSize}px ${fontStacks[overlay.fontFamily]}`
+    ctx.textBaseline = 'top'; ctx.textAlign = overlay.align; ctx.direction = 'inherit'
+    const textX = boxX + padding, textWidth = Math.max(1, boxWidth - padding * 2)
+    const drawX = overlay.align === 'left' ? textX : overlay.align === 'center' ? boxX + boxWidth / 2 : boxX + boxWidth - padding
+    let y = boxY + padding
+    for (const paragraph of overlay.text.split('\n')) {
+      const segments = typeof Intl.Segmenter === 'function' ? [...new Intl.Segmenter(undefined, { granularity: 'word' }).segment(paragraph)].map(item => item.segment) : Array.from(paragraph)
+      let line = ''
+      for (const segment of segments) {
+        const candidate = line + segment
+        if (line && ctx.measureText(candidate).width > textWidth) { ctx.fillText(line.trimEnd(), drawX, y); y += lineHeight; line = segment.trimStart() } else line = candidate
+        if (y + lineHeight > boxY + boxHeight - padding) break
+      }
+      if (y + lineHeight <= boxY + boxHeight - padding) { ctx.fillText(line, drawX, y); y += lineHeight }
+      if (y + lineHeight > boxY + boxHeight - padding) break
+    }
+    ctx.restore()
+  }
+}
+
+async function drawPageOverlays(ctx: CanvasRenderingContext2D, page: DocumentPage, width: number, height: number) {
+  const layers = [...page.imageOverlays.map(overlay => ({ kind: 'image' as const, zIndex: overlay.zIndex, overlay })), ...page.textOverlays.map(overlay => ({ kind: 'text' as const, zIndex: overlay.zIndex, overlay }))].sort((a, b) => a.zIndex - b.zIndex)
+  for (const layer of layers) {
+    if (layer.kind === 'text') { drawTextOverlays(ctx, page, width, height, layer.zIndex); continue }
+    const overlay = layer.overlay
+    const bitmap = await createImageBitmap(new Blob([overlay.bytes as BlobPart], { type: overlay.mimeType }))
+    try {
+      const sx = overlay.cropX * bitmap.width, sy = overlay.cropY * bitmap.height
+      const sw = overlay.cropWidth * bitmap.width, sh = overlay.cropHeight * bitmap.height
+      ctx.save(); ctx.globalAlpha = overlay.opacity; if (overlay.grayscale) ctx.filter = 'grayscale(1)'
+      ctx.drawImage(bitmap, sx, sy, sw, sh, overlay.x * width, overlay.y * height, overlay.width * width, overlay.height * height)
+      ctx.restore()
+    } finally { bitmap.close() }
+  }
+}
+
+async function overlayPng(page: DocumentPage): Promise<Uint8Array> {
+  const scale = Math.min(3, Math.max(1, 1800 / page.width))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(page.width * scale)); canvas.height = Math.max(1, Math.round(page.height * scale))
+  const context = canvas.getContext('2d')!
+  await drawPageOverlays(context, page, canvas.width, canvas.height)
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Text rendering failed')), 'image/png'))
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
 export async function importFiles(files: File[]): Promise<{ pages: DocumentPage[]; errors: string[] }> {
   const pages: DocumentPage[] = []
   const errors: string[] = []
@@ -66,15 +132,17 @@ export async function importFiles(files: File[]): Promise<{ pages: DocumentPage[
 
 async function imagePage(file: File): Promise<DocumentPage> {
   const bytes = new Uint8Array(await file.arrayBuffer())
+  const sourceId = crypto.randomUUID()
   const previewUrl = URL.createObjectURL(file)
   const bitmap = await createImageBitmap(file)
-  const page: DocumentPage = { id: crypto.randomUUID(), name: file.name, sourceType: 'image', bytes, previewUrl, width: bitmap.width, height: bitmap.height, rotation: 0, grayscale: false }
+  const page: DocumentPage = { id: crypto.randomUUID(), sourceId, name: file.name, sourceType: 'image', bytes, previewUrl, width: bitmap.width, height: bitmap.height, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] }
   bitmap.close()
   return page
 }
 
 async function pdfPages(file: File): Promise<DocumentPage[]> {
   const bytes = new Uint8Array(await file.arrayBuffer())
+  const sourceId = crypto.randomUUID()
   const pdf = await pdfjsLib.getDocument({ data: bytes.slice() }).promise
   const result: DocumentPage[] = []
   for (let n = 1; n <= pdf.numPages; n++) {
@@ -85,7 +153,7 @@ async function pdfPages(file: File): Promise<DocumentPage[]> {
     canvas.height = viewport.height
     const context = canvas.getContext('2d')!
     await page.render({ canvas, canvasContext: context, viewport }).promise
-    result.push({ id: crypto.randomUUID(), name: file.name, sourceType: 'pdf', sourcePage: n - 1, bytes, previewUrl: canvas.toDataURL('image/jpeg', 0.76), width: viewport.width / 0.45, height: viewport.height / 0.45, rotation: 0, grayscale: false })
+    result.push({ id: crypto.randomUUID(), sourceId, name: file.name, sourceType: 'pdf', sourcePage: n - 1, bytes, previewUrl: canvas.toDataURL('image/jpeg', 0.76), width: viewport.width / 0.45, height: viewport.height / 0.45, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] })
   }
   await pdf.destroy()
   return result
@@ -130,6 +198,11 @@ async function rasterize(page: DocumentPage, quality: Quality): Promise<{ bytes:
   ctx.rotate(page.rotation * Math.PI / 180)
   if (page.grayscale) ctx.filter = 'grayscale(1)'
   ctx.drawImage(source, -sourceWidth / 2, -sourceHeight / 2, sourceWidth, sourceHeight)
+  if (page.textOverlays.length || page.imageOverlays.length) {
+    ctx.filter = 'none'
+    ctx.translate(-sourceWidth / 2, -sourceHeight / 2)
+    await drawPageOverlays(ctx, page, sourceWidth, sourceHeight)
+  }
   cleanup()
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Encoding failed')), 'image/jpeg', config.jpeg))
   return { bytes: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height }
@@ -143,6 +216,11 @@ export async function exportPdf(pages: DocumentPage[], settings: ExportSettings,
       const source = await PDFDocument.load(page.bytes)
       const [copied] = await output.copyPages(source, [page.sourcePage ?? 0])
       output.addPage(copied)
+      if (page.textOverlays.length || page.imageOverlays.length) {
+        const overlay = await output.embedPng(await overlayPng(page))
+        const { width, height } = copied.getSize()
+        copied.drawImage(overlay, { x: 0, y: 0, width, height })
+      }
     } else {
       const raster = await rasterize(page, settings.quality)
       const image = await output.embedJpg(raster.bytes)
