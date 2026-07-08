@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { documentHistoryReducer, initialHistory } from './documentReducer'
 import type { DocumentPage } from './types'
+import appConfig from './app.config'
 
 const page = (id: string): DocumentPage => ({ id, sourceId: id, name: `${id}.jpg`, sourceType: 'image', bytes: new Uint8Array(), previewUrl: '', width: 10, height: 20, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] })
 
@@ -27,8 +28,8 @@ describe('documentHistoryReducer', () => {
 
   it('limits history to fifty actions', () => {
     let state = initialHistory
-    for (let index = 0; index < 60; index++) state = documentHistoryReducer(state, { type: 'ADD_PAGES', pages: [page(String(index))] })
-    expect(state.past).toHaveLength(50)
+    for (let index = 0; index < appConfig.limits.undoHistory + 10; index++) state = documentHistoryReducer(state, { type: 'ADD_PAGES', pages: [page(String(index))] })
+    expect(state.past).toHaveLength(appConfig.limits.undoHistory)
   })
 
   it('creates, updates, deletes, and undoes text overlays', () => {

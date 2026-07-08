@@ -20,6 +20,7 @@ Pagecraft is a privacy-focused browser application for combining images and PDF 
 - Select orientation, margins, and export-quality presets
 - Recover unfinished projects from private browser storage
 - Use the responsive interface on desktop and mobile browsers
+- Switch the complete interface between English and Bahasa Malaysia
 
 ## Privacy and architecture
 
@@ -51,6 +52,26 @@ npm run dev
 ```
 
 Open the local address printed by Vite.
+
+## Deployment configuration
+
+Public deployment settings live in one file: `src/app.config.ts`.
+
+It controls:
+
+- Application name
+- English and Bahasa Malaysia taglines and browser descriptions
+- First-visit language
+- Default PDF filename, page size, orientation, margins, and quality
+- Undo-history and viewer-rendering limits
+
+To change deployment settings:
+
+1. Edit `src/app.config.ts`.
+2. Run `npm run lint`, `npm run test`, and `npm run build`.
+3. Redeploy the generated `dist/` directory.
+
+Configuration changes do not modify an already deployed build; the application must be rebuilt and redeployed. The configuration is bundled into public browser JavaScript, so never place passwords, tokens, API keys, credentials, or other secrets in it. There is no runtime settings page, administrator login, backend, or database.
 
 ## Using Pagecraft
 

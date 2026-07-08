@@ -2,11 +2,12 @@ import { PDFDocument, degrees, rgb } from 'pdf-lib'
 import * as pdfjsLib from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { DocumentPage, ExportSettings, Margin, Quality } from './types'
+import appConfig from './app.config'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
 const viewerRenderCache = new Map<string, string>()
-const MAX_VIEWER_PIXELS = 16_000_000
+const MAX_VIEWER_PIXELS = appConfig.limits.viewerRenderPixels
 
 export function clearViewerRenderCache(pageId?: string) {
   if (!pageId) viewerRenderCache.clear()
@@ -115,16 +116,17 @@ async function overlayPng(page: DocumentPage): Promise<Uint8Array> {
   return new Uint8Array(await blob.arrayBuffer())
 }
 
-export async function importFiles(files: File[]): Promise<{ pages: DocumentPage[]; errors: string[] }> {
+export interface ImportFailure { code: 'unsupported' | 'unreadable'; name: string }
+export async function importFiles(files: File[]): Promise<{ pages: DocumentPage[]; errors: ImportFailure[] }> {
   const pages: DocumentPage[] = []
-  const errors: string[] = []
+  const errors: ImportFailure[] = []
   for (const file of files) {
     try {
       if (file.type === 'image/jpeg' || file.type === 'image/png') pages.push(await imagePage(file))
       else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) pages.push(...await pdfPages(file))
-      else errors.push(`${file.name}: unsupported format`)
+      else errors.push({ code: 'unsupported', name: file.name })
     } catch {
-      errors.push(`${file.name}: could not be read`)
+      errors.push({ code: 'unreadable', name: file.name })
     }
   }
   return { pages, errors }

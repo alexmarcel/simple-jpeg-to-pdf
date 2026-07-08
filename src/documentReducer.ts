@@ -1,8 +1,9 @@
 import { arrayMove } from '@dnd-kit/sortable'
 import type { DocumentAction, DocumentState, HistoryState } from './types'
+import appConfig from './app.config'
 
 export const initialHistory: HistoryState = { past: [], present: { pages: [] }, future: [] }
-const HISTORY_LIMIT = 50
+const HISTORY_LIMIT = appConfig.limits.undoHistory
 
 function update(state: DocumentState, action: Exclude<DocumentAction, { type: 'UNDO' | 'REDO' | 'RESET' }>): DocumentState {
   const pages = state.pages

@@ -3,6 +3,7 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, BringToFront, ChevronLeft, Ch
 import { renderPagePreview } from './pdf'
 import type { DocumentPage, ImageOverlay, TextOverlay } from './types'
 import { cropAtZoom, cropZoom, frameAtAspect, panCrop, type CropFrame } from './crop'
+import { useI18n } from './i18n'
 
 type EditAction = 'rotate' | 'grayscale' | 'duplicate' | 'remove'
 
@@ -38,6 +39,7 @@ interface ImageBoxProps {
 }
 
 function ImageBox({ overlay, page, zoom, selected, onSelect, onUpdate, cropMode, onCropChange, onStartCrop, freeCrop }: ImageBoxProps) {
+  const { t } = useI18n()
   const [frame, setFrame] = useState({ x: overlay.x, y: overlay.y, width: overlay.width, height: overlay.height })
   const cropPointers = useRef(new Map<number, { x: number; y: number }>())
   const cropGesture = useRef<{ frame: CropFrame; x: number; y: number; distance: number; zoom: number } | null>(null)
@@ -103,9 +105,9 @@ function ImageBox({ overlay, page, zoom, selected, onSelect, onUpdate, cropMode,
   }
   return <div className={`image-overlay-box ${selected ? 'selected' : ''} ${cropMode ? 'cropping' : ''}`} style={{ left: `${frame.x * 100}%`, top: `${frame.y * 100}%`, width: `${frame.width * 100}%`, height: `${frame.height * 100}%`, zIndex: overlay.zIndex }} onDoubleClick={event => { event.stopPropagation(); if (!cropMode) onStartCrop() }} onWheel={cropWheel} onPointerDown={event => { if (cropMode) cropPointerDown(event); else { event.stopPropagation(); onSelect() } }} onPointerMove={cropPointerMove} onPointerUp={cropPointerUp} onPointerCancel={cropPointerUp}>
     <img draggable={false} src={overlay.previewUrl} alt={overlay.name} style={{ left: `${-overlay.cropX / overlay.cropWidth * 100}%`, top: `${-overlay.cropY / overlay.cropHeight * 100}%`, width: `${100 / overlay.cropWidth}%`, height: `${100 / overlay.cropHeight}%`, opacity: overlay.opacity, filter: overlay.grayscale ? 'grayscale(1)' : 'none' }} />
-    {selected && !cropMode && <><button className="image-move-handle" aria-label="Move inserted image" onPointerDown={event => beginGesture(event, 'move')}><ImageIcon size={13} /></button><button className="image-resize-handle" aria-label="Resize inserted image" onPointerDown={event => beginGesture(event, 'resize')} /></>}
+    {selected && !cropMode && <><button className="image-move-handle" aria-label={t('moveImage')} onPointerDown={event => beginGesture(event, 'move')}><ImageIcon size={13} /></button><button className="image-resize-handle" aria-label={t('resizeImage')} onPointerDown={event => beginGesture(event, 'resize')} /></>}
     {cropMode && <div className="crop-grid" aria-hidden="true"><i /><i /><i /><i /></div>}
-    {cropMode && freeCrop && <button className="crop-frame-resize" aria-label="Resize free crop frame" onPointerDown={beginFreeResize} />}
+    {cropMode && freeCrop && <button className="crop-frame-resize" aria-label={t('resizeCrop')} onPointerDown={beginFreeResize} />}
   </div>
 }
 
@@ -123,6 +125,7 @@ interface TextBoxProps {
 }
 
 function TextBox({ overlay, page, zoom, selected, onSelect, onUpdate, onDelete }: TextBoxProps) {
+  const { t } = useI18n()
   const [frame, setFrame] = useState({ x: overlay.x, y: overlay.y, width: overlay.width, height: overlay.height })
   useEffect(() => setFrame({ x: overlay.x, y: overlay.y, width: overlay.width, height: overlay.height }), [overlay.x, overlay.y, overlay.width, overlay.height])
 
@@ -147,13 +150,14 @@ function TextBox({ overlay, page, zoom, selected, onSelect, onUpdate, onDelete }
   }
 
   return <div className={`text-overlay-box ${selected ? 'selected' : ''}`} style={{ left: `${frame.x * 100}%`, top: `${frame.y * 100}%`, width: `${frame.width * 100}%`, height: `${frame.height * 100}%`, padding: `${(overlay.padding ?? 0) * page.width}px`, borderRadius: `${(overlay.borderRadius ?? 0) * page.width}px`, backgroundColor: colorWithOpacity(overlay.backgroundColor, overlay.backgroundOpacity), zIndex: overlay.zIndex }} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); onSelect() }}>
-    {selected && <button className="text-move-handle" aria-label="Move text" onPointerDown={event => beginGesture(event, 'move')}><TextCursorInput size={13} /></button>}
-    <textarea aria-label="Text content" defaultValue={overlay.text} placeholder="Type here" dir="auto" autoFocus={!overlay.text} onFocus={onSelect} onBlur={event => event.target.value.trim() ? onUpdate({ text: event.target.value }) : onDelete()} style={{ color: overlay.color, fontFamily: overlay.fontFamily === 'sans' ? 'Arial, sans-serif' : overlay.fontFamily === 'serif' ? 'Georgia, serif' : 'Courier New, monospace', fontSize: `${overlay.fontSize * page.width}px`, fontWeight: overlay.bold ? 700 : 400, fontStyle: overlay.italic ? 'italic' : 'normal', textAlign: overlay.align }} />
-    {selected && <button className="text-resize-handle" aria-label="Resize text box" onPointerDown={event => beginGesture(event, 'resize')} />}
+    {selected && <button className="text-move-handle" aria-label={t('moveText')} onPointerDown={event => beginGesture(event, 'move')}><TextCursorInput size={13} /></button>}
+    <textarea aria-label={t('textContent')} defaultValue={overlay.text} placeholder={t('typeHere')} dir="auto" autoFocus={!overlay.text} onFocus={onSelect} onBlur={event => event.target.value.trim() ? onUpdate({ text: event.target.value }) : onDelete()} style={{ color: overlay.color, fontFamily: overlay.fontFamily === 'sans' ? 'Arial, sans-serif' : overlay.fontFamily === 'serif' ? 'Georgia, serif' : 'Courier New, monospace', fontSize: `${overlay.fontSize * page.width}px`, fontWeight: overlay.bold ? 700 : 400, fontStyle: overlay.italic ? 'italic' : 'normal', textAlign: overlay.align }} />
+    {selected && <button className="text-resize-handle" aria-label={t('resizeText')} onPointerDown={event => beginGesture(event, 'resize')} />}
   </div>
 }
 
 export default function PageViewer({ pages, pageId, onPageChange, onEdit, onDelete, onAddText, onUpdateText, onDeleteText, onDuplicateText, onAddImages, onUpdateImage, onDeleteImage, onDuplicateImage, onMoveImageLayer, onClose }: PageViewerProps) {
+  const { t } = useI18n()
   const pageIndex = pages.findIndex(page => page.id === pageId)
   const page = pages[pageIndex]
   const [zoom, setZoom] = useState(100)
@@ -349,20 +353,20 @@ export default function PageViewer({ pages, pageId, onPageChange, onEdit, onDele
   const next = pageIndex < pages.length - 1 ? pages[pageIndex + 1] : null
 
   return <div className="viewer-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
-    <div className="viewer" role="dialog" aria-modal="true" aria-label={`Full view of ${page.name}`} ref={dialogRef} tabIndex={-1}>
+    <div className="viewer" role="dialog" aria-modal="true" aria-label={t('fullView', { name: page.name })} ref={dialogRef} tabIndex={-1}>
       <header className="viewer-header">
-        <div className="viewer-title"><strong>{page.name}</strong><span>Page {pageIndex + 1} of {pages.length}{page.sourceType === 'pdf' ? ` · source page ${(page.sourcePage ?? 0) + 1}` : ''}</span></div>
-        <div className="viewer-tools" aria-label="Zoom controls">
-          <button aria-label="Zoom out" onClick={() => changeZoom(zoom - 25)}><Minus size={16} /></button>
-          <button className="zoom-value" aria-label={`Zoom ${Math.round(zoom)} percent`} onClick={() => changeZoom(100)}>{Math.round(zoom)}%</button>
-          <button aria-label="Zoom in" onClick={() => changeZoom(zoom + 25)}><Plus size={16} /></button>
-          <button className={fitMode ? 'active' : ''} onClick={fitPage}><Maximize2 size={15} /> Fit</button>
+        <div className="viewer-title"><strong>{page.name}</strong><span>{t('pageOf', { current: pageIndex + 1, total: pages.length })}{page.sourceType === 'pdf' ? ` · ${t('sourcePage', { number: (page.sourcePage ?? 0) + 1 })}` : ''}</span></div>
+        <div className="viewer-tools" aria-label={t('zoomControls')}>
+          <button aria-label={t('zoomOut')} onClick={() => changeZoom(zoom - 25)}><Minus size={16} /></button>
+          <button className="zoom-value" aria-label={t('zoomPercent', { percent: Math.round(zoom) })} onClick={() => changeZoom(100)}>{Math.round(zoom)}%</button>
+          <button aria-label={t('zoomIn')} onClick={() => changeZoom(zoom + 25)}><Plus size={16} /></button>
+          <button className={fitMode ? 'active' : ''} onClick={fitPage}><Maximize2 size={15} /> {t('fit')}</button>
           <button onClick={() => changeZoom(100)}>100%</button>
         </div>
-        <button className="viewer-close" aria-label="Close full-page viewer" onClick={onClose}><X size={21} /></button>
+        <button className="viewer-close" aria-label={t('closeViewer')} onClick={onClose}><X size={21} /></button>
       </header>
       <div className={`viewer-stage ${fitMode ? 'fit' : 'pannable'} ${textMode ? 'text-mode' : ''} ${pickingBackground ? 'color-pick-mode' : ''}`} ref={viewportRef} onWheel={wheel} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} onClick={handlePageClick} onDoubleClick={() => { if (!textMode && !pickingBackground) { if (fitMode) changeZoom(Math.max(100, zoom * 2)); else fitPage() } }}>
-        {rendering && <span className="viewer-loading">Rendering high-resolution page…</span>}
+        {rendering && <span className="viewer-loading">{t('rendering')}</span>}
         <div className="viewer-page-position" style={{ width: page.width, height: page.height, transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) rotate(${page.rotation}deg) scale(${zoom / 100})` }}>
           <img ref={imageRef} src={source} alt={`Full page preview of ${page.name}`} draggable={false} style={{ filter: page.grayscale ? 'grayscale(1)' : 'none' }} />
           <div className="page-overlay-layer">
@@ -370,29 +374,29 @@ export default function PageViewer({ pages, pageId, onPageChange, onEdit, onDele
             {page.textOverlays.map(overlay => <TextBox key={overlay.id} overlay={overlay} page={page} zoom={zoom} selected={selectedTextId === overlay.id} onSelect={() => { setSelectedTextId(overlay.id); setSelectedImageId(null); setCropDraft(null) }} onUpdate={patch => onUpdateText(page.id, overlay.id, patch)} onDelete={() => { onDeleteText(page.id, overlay.id); setSelectedTextId(null) }} />)}
           </div>
         </div>
-        <button className="viewer-nav previous" aria-label="Previous page" disabled={!previous} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); if (previous) onPageChange(previous.id) }}><ChevronLeft size={28} /></button>
-        <button className="viewer-nav next" aria-label="Next page" disabled={!next} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); if (next) onPageChange(next.id) }}><ChevronRight size={28} /></button>
+        <button className="viewer-nav previous" aria-label={t('previousPage')} disabled={!previous} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); if (previous) onPageChange(previous.id) }}><ChevronLeft size={28} /></button>
+        <button className="viewer-nav next" aria-label={t('nextPage')} disabled={!next} onPointerDown={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); if (next) onPageChange(next.id) }}><ChevronRight size={28} /></button>
       </div>
       <footer className="viewer-footer">
-        <div><button className={textMode ? 'active' : ''} onClick={() => { setTextMode(value => !value); setSelectedTextId(null); setSelectedImageId(null) }}><TextCursorInput size={15} /> Add text</button><button onClick={() => insertImageInput.current?.click()}><ImagePlus size={15} /> Insert image</button><input ref={insertImageInput} hidden type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={event => { if (event.target.files) void insertImages(event.target.files); event.target.value = '' }} /><button onClick={() => onEdit(page.id, 'rotate')}><RotateCw size={15} /> Rotate</button><button className={page.grayscale ? 'active' : ''} onClick={() => onEdit(page.id, 'grayscale')}><ImageIcon size={15} /> Grayscale</button><button onClick={() => onEdit(page.id, 'duplicate')}><Copy size={15} /> Duplicate</button></div>
-        <button className="viewer-delete" onClick={() => onDelete(page.id)}><Trash2 size={15} /> Delete page</button>
+        <div><button className={textMode ? 'active' : ''} onClick={() => { setTextMode(value => !value); setSelectedTextId(null); setSelectedImageId(null) }}><TextCursorInput size={15} /> {t('addText')}</button><button onClick={() => insertImageInput.current?.click()}><ImagePlus size={15} /> {t('insertImage')}</button><input ref={insertImageInput} hidden type="file" multiple accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" onChange={event => { if (event.target.files) void insertImages(event.target.files); event.target.value = '' }} /><button onClick={() => onEdit(page.id, 'rotate')}><RotateCw size={15} /> {t('rotate')}</button><button className={page.grayscale ? 'active' : ''} onClick={() => onEdit(page.id, 'grayscale')}><ImageIcon size={15} /> {t('grayscale')}</button><button onClick={() => onEdit(page.id, 'duplicate')}><Copy size={15} /> {t('duplicate')}</button></div>
+        <button className="viewer-delete" onClick={() => onDelete(page.id)}><Trash2 size={15} /> {t('deletePage')}</button>
       </footer>
       {selectedTextId && (() => { const overlay = page.textOverlays.find(item => item.id === selectedTextId); return overlay ? <div className="text-format-toolbar">
-        <select aria-label="Font family" value={overlay.fontFamily} onChange={event => onUpdateText(page.id, overlay.id, { fontFamily: event.target.value as TextOverlay['fontFamily'] })}><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select>
-        <label>Size <input type="number" min="8" max="96" value={Math.round(overlay.fontSize * 612)} onChange={event => onUpdateText(page.id, overlay.id, { fontSize: Math.max(8, Math.min(96, Number(event.target.value))) / 612 })} /></label>
-        <input aria-label="Text color" type="color" value={overlay.color} onChange={event => onUpdateText(page.id, overlay.id, { color: event.target.value })} />
+        <select aria-label={t('fontFamily')} value={overlay.fontFamily} onChange={event => onUpdateText(page.id, overlay.id, { fontFamily: event.target.value as TextOverlay['fontFamily'] })}><option value="sans">{t('sans')}</option><option value="serif">{t('serif')}</option><option value="mono">{t('mono')}</option></select>
+        <label>{t('size')} <input type="number" min="8" max="96" value={Math.round(overlay.fontSize * 612)} onChange={event => onUpdateText(page.id, overlay.id, { fontSize: Math.max(8, Math.min(96, Number(event.target.value))) / 612 })} /></label>
+        <input aria-label={t('textColor')} type="color" value={overlay.color} onChange={event => onUpdateText(page.id, overlay.id, { color: event.target.value })} />
         <span className="toolbar-divider" />
-        <PaintBucket size={15} aria-hidden="true" /><input aria-label="Background color" type="color" value={overlay.backgroundColor ?? '#ffffff'} onChange={event => onUpdateText(page.id, overlay.id, { backgroundColor: event.target.value })} />
-        <button className={pickingBackground ? 'active' : ''} aria-label="Pick background color from page" title="Pick color from page" onClick={() => { setPickingBackground(value => !value); setTextMode(false) }}><Pipette size={15} /></button>
-        <label>Opacity <input className="opacity-slider" type="range" min="0" max="100" value={Math.round((overlay.backgroundOpacity ?? 1) * 100)} onChange={event => onUpdateText(page.id, overlay.id, { backgroundOpacity: Number(event.target.value) / 100, backgroundColor: overlay.backgroundColor ?? '#ffffff' })} /></label>
-        <button aria-label="Remove background" title="No background" onClick={() => onUpdateText(page.id, overlay.id, { backgroundColor: null })}><X size={14} /></button>
-        <button className={overlay.bold ? 'active' : ''} aria-label="Bold" onClick={() => onUpdateText(page.id, overlay.id, { bold: !overlay.bold })}><Bold size={15} /></button><button className={overlay.italic ? 'active' : ''} aria-label="Italic" onClick={() => onUpdateText(page.id, overlay.id, { italic: !overlay.italic })}><Italic size={15} /></button>
-        <button className={overlay.align === 'left' ? 'active' : ''} aria-label="Align left" onClick={() => onUpdateText(page.id, overlay.id, { align: 'left' })}><AlignLeft size={15} /></button><button className={overlay.align === 'center' ? 'active' : ''} aria-label="Align center" onClick={() => onUpdateText(page.id, overlay.id, { align: 'center' })}><AlignCenter size={15} /></button><button className={overlay.align === 'right' ? 'active' : ''} aria-label="Align right" onClick={() => onUpdateText(page.id, overlay.id, { align: 'right' })}><AlignRight size={15} /></button>
-        <span className="text-toolbar-spacer" /><button aria-label="Duplicate text" onClick={() => onDuplicateText(page.id, overlay.id)}><Copy size={15} /></button><button className="danger" aria-label="Delete text" onClick={() => { onDeleteText(page.id, overlay.id); setSelectedTextId(null) }}><Trash2 size={15} /></button>
+        <PaintBucket size={15} aria-hidden="true" /><input aria-label={t('backgroundColor')} type="color" value={overlay.backgroundColor ?? '#ffffff'} onChange={event => onUpdateText(page.id, overlay.id, { backgroundColor: event.target.value })} />
+        <button className={pickingBackground ? 'active' : ''} aria-label={t('pickColor')} title={t('pickColorTitle')} onClick={() => { setPickingBackground(value => !value); setTextMode(false) }}><Pipette size={15} /></button>
+        <label>{t('opacity')} <input className="opacity-slider" type="range" min="0" max="100" value={Math.round((overlay.backgroundOpacity ?? 1) * 100)} onChange={event => onUpdateText(page.id, overlay.id, { backgroundOpacity: Number(event.target.value) / 100, backgroundColor: overlay.backgroundColor ?? '#ffffff' })} /></label>
+        <button aria-label={t('removeBackground')} title={t('noBackground')} onClick={() => onUpdateText(page.id, overlay.id, { backgroundColor: null })}><X size={14} /></button>
+        <button className={overlay.bold ? 'active' : ''} aria-label={t('bold')} onClick={() => onUpdateText(page.id, overlay.id, { bold: !overlay.bold })}><Bold size={15} /></button><button className={overlay.italic ? 'active' : ''} aria-label={t('italic')} onClick={() => onUpdateText(page.id, overlay.id, { italic: !overlay.italic })}><Italic size={15} /></button>
+        <button className={overlay.align === 'left' ? 'active' : ''} aria-label={t('alignLeft')} onClick={() => onUpdateText(page.id, overlay.id, { align: 'left' })}><AlignLeft size={15} /></button><button className={overlay.align === 'center' ? 'active' : ''} aria-label={t('alignCenter')} onClick={() => onUpdateText(page.id, overlay.id, { align: 'center' })}><AlignCenter size={15} /></button><button className={overlay.align === 'right' ? 'active' : ''} aria-label={t('alignRight')} onClick={() => onUpdateText(page.id, overlay.id, { align: 'right' })}><AlignRight size={15} /></button>
+        <span className="text-toolbar-spacer" /><button aria-label={t('duplicateText')} onClick={() => onDuplicateText(page.id, overlay.id)}><Copy size={15} /></button><button className="danger" aria-label={t('deleteText')} onClick={() => { onDeleteText(page.id, overlay.id); setSelectedTextId(null) }}><Trash2 size={15} /></button>
       </div> : null })()}
       {selectedImageId && (() => { const overlay = page.imageOverlays.find(item => item.id === selectedImageId); return overlay ? <div className="text-format-toolbar image-format-toolbar">
-        {!cropDraft ? <><button onClick={() => startCrop(overlay)}><Crop size={15} /> Crop</button><button onClick={() => { const frame: CropFrame = { x: overlay.x, y: overlay.y, width: overlay.width, height: overlay.height, cropX: 0, cropY: 0, cropWidth: 1, cropHeight: 1 }; onUpdateImage(page.id, overlay.id, cropAtZoom(frame, 1, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight)) }}>Reset crop</button><label>Opacity <input className="opacity-slider" type="range" min="0" max="100" value={Math.round(overlay.opacity * 100)} onChange={event => onUpdateImage(page.id, overlay.id, { opacity: Number(event.target.value) / 100 })} /></label><button className={overlay.grayscale ? 'active' : ''} onClick={() => onUpdateImage(page.id, overlay.id, { grayscale: !overlay.grayscale })}><ImageIcon size={15} /> Grayscale</button><button title="Move backward" onClick={() => onMoveImageLayer(page.id, overlay.id, 'backward')}><SendToBack size={15} /></button><button title="Move forward" onClick={() => onMoveImageLayer(page.id, overlay.id, 'forward')}><BringToFront size={15} /></button><span className="text-toolbar-spacer" /><button onClick={() => onDuplicateImage(page.id, overlay.id)}><Copy size={15} /></button><button className="danger" onClick={() => { onDeleteImage(page.id, overlay.id); setSelectedImageId(null) }}><Trash2 size={15} /></button></> : <>
-          <strong>Crop</strong><div className="crop-ratios">{(['free', 'original', 'square', '4:3', '16:9'] as const).map(ratio => <button key={ratio} className={cropAspect === ratio ? 'active' : ''} onClick={() => { setCropAspect(ratio); if (ratio !== 'free') { const value = ratio === 'original' ? overlay.naturalWidth / overlay.naturalHeight : ratio === 'square' ? 1 : ratio === '4:3' ? 4 / 3 : 16 / 9; setCropDraft(frameAtAspect(cropDraft, value, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight)) } }}>{ratio === 'square' ? '1:1' : ratio[0].toUpperCase() + ratio.slice(1)}</button>)}</div><label>Zoom <input className="crop-zoom-slider" type="range" min="100" max="800" value={Math.round(cropZoom(cropDraft, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight) * 100)} onChange={event => setCropDraft(cropAtZoom(cropDraft, Number(event.target.value) / 100, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight))} /></label><button onClick={() => { const reset = { ...cropDraft, cropX: 0, cropY: 0, cropWidth: 1, cropHeight: 1 }; setCropDraft(cropAtZoom(reset, 1, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight)) }}>Reset</button><span className="text-toolbar-spacer" /><button onClick={() => setCropDraft(null)}>Cancel</button><button className="active" onClick={() => { onUpdateImage(page.id, overlay.id, cropDraft); setCropDraft(null) }}>Apply</button>
+        {!cropDraft ? <><button onClick={() => startCrop(overlay)}><Crop size={15} /> {t('crop')}</button><button onClick={() => { const frame: CropFrame = { x: overlay.x, y: overlay.y, width: overlay.width, height: overlay.height, cropX: 0, cropY: 0, cropWidth: 1, cropHeight: 1 }; onUpdateImage(page.id, overlay.id, cropAtZoom(frame, 1, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight)) }}>{t('resetCrop')}</button><label>{t('opacity')} <input className="opacity-slider" type="range" min="0" max="100" value={Math.round(overlay.opacity * 100)} onChange={event => onUpdateImage(page.id, overlay.id, { opacity: Number(event.target.value) / 100 })} /></label><button className={overlay.grayscale ? 'active' : ''} onClick={() => onUpdateImage(page.id, overlay.id, { grayscale: !overlay.grayscale })}><ImageIcon size={15} /> {t('grayscale')}</button><button title={t('moveBackward')} onClick={() => onMoveImageLayer(page.id, overlay.id, 'backward')}><SendToBack size={15} /></button><button title={t('moveForward')} onClick={() => onMoveImageLayer(page.id, overlay.id, 'forward')}><BringToFront size={15} /></button><span className="text-toolbar-spacer" /><button title={t('duplicate')} onClick={() => onDuplicateImage(page.id, overlay.id)}><Copy size={15} /></button><button className="danger" title={t('delete')} onClick={() => { onDeleteImage(page.id, overlay.id); setSelectedImageId(null) }}><Trash2 size={15} /></button></> : <>
+          <strong>{t('crop')}</strong><div className="crop-ratios">{(['free', 'original', 'square', '4:3', '16:9'] as const).map(ratio => <button key={ratio} className={cropAspect === ratio ? 'active' : ''} onClick={() => { setCropAspect(ratio); if (ratio !== 'free') { const value = ratio === 'original' ? overlay.naturalWidth / overlay.naturalHeight : ratio === 'square' ? 1 : ratio === '4:3' ? 4 / 3 : 16 / 9; setCropDraft(frameAtAspect(cropDraft, value, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight)) } }}>{ratio === 'square' ? t('square') : ratio === 'free' ? t('free') : ratio === 'original' ? t('original') : ratio}</button>)}</div><label>{t('zoom')} <input className="crop-zoom-slider" type="range" min="100" max="800" value={Math.round(cropZoom(cropDraft, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight) * 100)} onChange={event => setCropDraft(cropAtZoom(cropDraft, Number(event.target.value) / 100, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight))} /></label><button onClick={() => { const reset = { ...cropDraft, cropX: 0, cropY: 0, cropWidth: 1, cropHeight: 1 }; setCropDraft(cropAtZoom(reset, 1, page.width, page.height, overlay.naturalWidth, overlay.naturalHeight)) }}>{t('reset')}</button><span className="text-toolbar-spacer" /><button onClick={() => setCropDraft(null)}>{t('cancel')}</button><button className="active" onClick={() => { onUpdateImage(page.id, overlay.id, cropDraft); setCropDraft(null) }}>{t('apply')}</button>
         </>}</div> : null })()}
     </div>
   </div>
