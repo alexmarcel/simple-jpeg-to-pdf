@@ -33,7 +33,7 @@ export interface AppConfig {
 
 const appConfig = {
   branding: {
-    name: 'Pagecraft',
+    name: 'BikinPDF',
     tagline: {
       en: 'PDF maker',
       'ms-MY': 'Pembina PDF',
@@ -45,7 +45,7 @@ const appConfig = {
   },
   defaultLocale: 'ms-MY',
   exportDefaults: {
-    filename: 'pagecraft-document',
+    filename: 'bikinPDF-document',
     pageMode: 'original',
     orientation: 'auto',
     margin: 'normal',
