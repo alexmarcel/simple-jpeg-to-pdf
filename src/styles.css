@@ -161,6 +161,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
     gap: 6px;
   }
   .app-shell > header .header-actions .button { padding: 9px 12px; }
+  .app-shell > header .header-actions .button.dark { display: none; }
   .app-shell > header .history-button { width: 36px; height: 36px; }
 }
 
