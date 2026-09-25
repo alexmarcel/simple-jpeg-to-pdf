@@ -1,6 +1,6 @@
 import { PDFDocument, degrees, rgb } from 'pdf-lib'
-import * as pdfjsLib from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 import type { DocumentPage, ExportSettings, Margin, Quality } from './types'
 import appConfig from './app.config'
 
