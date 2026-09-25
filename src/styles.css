@@ -141,7 +141,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
     border-radius: 9px;
   }
   .app-shell > header .brand > span:last-child { min-width: 0; }
-  .app-shell > header .brand small { display: none; }
+  .app-shell > header .brand small {
+    display: block;
+    margin-top: 3px;
+    color: #8d7476;
+    font-size: 7px;
+    line-height: 1;
+    letter-spacing: .02em;
+    text-transform: none;
+    white-space: nowrap;
+  }
   .app-shell > header .language-switch {
     grid-column: 2;
     grid-row: 1;
@@ -172,6 +181,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline-color:
   .app-shell > header { padding-inline: 10px; }
   .app-shell > header .brand { font-size: 15px; }
   .app-shell > header .brand-mark { width: 31px; height: 31px; flex-basis: 31px; }
+  .app-shell > header .brand small { font-size: 6px; letter-spacing: 0; }
   .app-shell > header .language-switch button { min-width: 27px; padding-inline: 5px; }
   .app-shell > header .history-button { width: 33px; height: 33px; }
 }
