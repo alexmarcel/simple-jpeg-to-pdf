@@ -2,7 +2,7 @@ export type SourceType = 'image' | 'pdf'
 export type PageMode = 'original' | 'a4' | 'letter'
 export type Orientation = 'auto' | 'portrait' | 'landscape'
 export type Margin = 'none' | 'narrow' | 'normal'
-export type Quality = 'small' | 'balanced' | 'best'
+export type Quality = 'small' | 'balanced' | 'best' | 'originalQuality'
 export type TextFont = 'sans' | 'serif' | 'mono'
 export type TextAlign = 'left' | 'center' | 'right'
 

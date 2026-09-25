@@ -15,7 +15,7 @@ describe('deployment configuration', () => {
     expect(['original', 'a4', 'letter']).toContain(appConfig.exportDefaults.pageMode)
     expect(['auto', 'portrait', 'landscape']).toContain(appConfig.exportDefaults.orientation)
     expect(['none', 'narrow', 'normal']).toContain(appConfig.exportDefaults.margin)
-    expect(['small', 'balanced', 'best']).toContain(appConfig.exportDefaults.quality)
+    expect(['small', 'balanced', 'best', 'originalQuality']).toContain(appConfig.exportDefaults.quality)
     expect(appConfig.limits.undoHistory).toBeGreaterThan(0)
     expect(appConfig.limits.viewerRenderPixels).toBeGreaterThan(1_000_000)
   })

@@ -23,7 +23,7 @@ export interface AppConfig {
     pageMode: 'original' | 'a4' | 'letter'
     orientation: 'auto' | 'portrait' | 'landscape'
     margin: 'none' | 'narrow' | 'normal'
-    quality: 'small' | 'balanced' | 'best'
+    quality: 'small' | 'balanced' | 'best' | 'originalQuality'
   }
   limits: {
     /** Maximum number of document states retained for undo and redo. */

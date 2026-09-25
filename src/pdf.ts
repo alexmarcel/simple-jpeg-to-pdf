@@ -71,6 +71,7 @@ const qualityConfig: Record<Quality, { scale: number; jpeg: number }> = {
   small: { scale: 0.55, jpeg: 0.68 },
   balanced: { scale: 0.8, jpeg: 0.84 },
   best: { scale: 1, jpeg: 0.94 },
+  originalQuality: { scale: 1, jpeg: 1 },
 }
 
 const marginPoints: Record<Margin, number> = { none: 0, narrow: 18, normal: 36 }
