@@ -2,9 +2,9 @@ import { useEffect, useMemo, useReducer, useRef, useState, type MouseEvent } fro
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Check, Download, Eye, FilePlus2, Files, GripVertical, Grid2X2, Grid3X3, History, Image as ImageIcon, Plus, Redo2, RotateCw, ShieldCheck, Sparkles, Trash2, Undo2, X } from 'lucide-react'
+import { Check, Download, Eye, FilePlus2, Files, FileText, GripVertical, Grid2X2, Grid3X3, History, Image as ImageIcon, Mail, Plus, Printer, Redo2, RotateCw, Scale, ShieldCheck, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { documentHistoryReducer, initialHistory } from './documentReducer'
-import { clearViewerRenderCache, exportPdf, importFiles } from './pdf'
+import { clearViewerRenderCache, exportPdf, importFiles, renderPagePreview } from './pdf'
 import { createSnapshot, discardRecovery, hydrateRecovery, loadRecovery, saveRecovery, type RecoverySnapshot } from './recovery'
 import type { DocumentPage, ExportSettings, ImageOverlay, PageEdit, TextOverlay } from './types'
 import PageViewer from './PageViewer'
@@ -23,17 +23,26 @@ interface SortablePageProps {
   onCheck: (event: MouseEvent<HTMLInputElement>) => void
   onOpen: () => void
   onEdit: (action: PageEdit) => void
+  onVisible: (page: DocumentPage) => void
 }
 
-function SortablePage({ page, index, checked, onCheck, onOpen, onEdit }: SortablePageProps) {
+function SortablePage({ page, index, checked, onCheck, onOpen, onEdit, onVisible }: SortablePageProps) {
   const { t } = useI18n()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id })
-  return <article ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`page-card ${checked ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}>
+  const cardRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    const element = cardRef.current
+    if (!element || page.sourceType !== 'pdf' || page.previewStatus === 'ready') return
+    const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) { onVisible(page); observer.disconnect() } }, { rootMargin: '800px' })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [onVisible, page])
+  return <article ref={node => { cardRef.current = node; setNodeRef(node) }} style={{ transform: CSS.Transform.toString(transform), transition }} className={`page-card ${checked ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}>
     <div className="page-preview" onDoubleClick={onOpen}>
-      <div className={`thumbnail-page ${page.width >= page.height ? 'landscape' : 'portrait'}`} style={{ aspectRatio: `${page.width} / ${page.height}`, transform: `rotate(${page.rotation}deg)` }}>
-        <img src={page.previewUrl} alt={`Preview of ${page.name}`} style={{ filter: page.grayscale ? 'grayscale(1)' : 'none' }} />
+      <div className={`thumbnail-page ${page.width >= page.height ? 'landscape' : 'portrait'}`} style={{ aspectRatio: `${page.width} / ${page.height}`, transform: `rotate(${page.rotation}deg)` }} onPointerDown={event => { if (typeof listeners?.onPointerDown === 'function') listeners.onPointerDown(event) }}>
+        {page.previewUrl ? <img draggable={false} src={page.previewUrl} alt={`Preview of ${page.name}`} style={{ filter: page.grayscale ? 'grayscale(1)' : 'none' }} /> : <span className={`thumbnail-skeleton ${page.previewStatus === 'failed' ? 'failed' : ''}`}>{page.previewStatus === 'failed' ? '!' : ''}</span>}
         <div className="thumbnail-text-layer">
-          {page.imageOverlays.map(overlay => <div className="thumbnail-image-overlay" key={overlay.id} style={{ left: `${overlay.x * 100}%`, top: `${overlay.y * 100}%`, width: `${overlay.width * 100}%`, height: `${overlay.height * 100}%`, zIndex: overlay.zIndex }}><img src={overlay.previewUrl} alt="" style={{ left: `${-overlay.cropX / overlay.cropWidth * 100}%`, top: `${-overlay.cropY / overlay.cropHeight * 100}%`, width: `${100 / overlay.cropWidth}%`, height: `${100 / overlay.cropHeight}%`, opacity: overlay.opacity, filter: overlay.grayscale ? 'grayscale(1)' : 'none' }} /></div>)}
+          {page.imageOverlays.map(overlay => <div className="thumbnail-image-overlay" key={overlay.id} style={{ left: `${overlay.x * 100}%`, top: `${overlay.y * 100}%`, width: `${overlay.width * 100}%`, height: `${overlay.height * 100}%`, zIndex: overlay.zIndex }}><img draggable={false} src={overlay.previewUrl} alt="" style={{ left: `${-overlay.cropX / overlay.cropWidth * 100}%`, top: `${-overlay.cropY / overlay.cropHeight * 100}%`, width: `${100 / overlay.cropWidth}%`, height: `${100 / overlay.cropHeight}%`, opacity: overlay.opacity, filter: overlay.grayscale ? 'grayscale(1)' : 'none' }} /></div>)}
           {page.textOverlays.map(overlay => <div key={overlay.id} dir="auto" style={{ left: `${overlay.x * 100}%`, top: `${overlay.y * 100}%`, width: `${overlay.width * 100}%`, height: `${overlay.height * 100}%`, padding: `${(overlay.padding ?? 0) * 100}cqw`, borderRadius: `${(overlay.borderRadius ?? 0) * 100}cqw`, backgroundColor: colorWithOpacity(overlay.backgroundColor, overlay.backgroundOpacity), color: overlay.color, fontFamily: overlay.fontFamily === 'sans' ? 'Arial, sans-serif' : overlay.fontFamily === 'serif' ? 'Georgia, serif' : 'Courier New, monospace', fontSize: `${overlay.fontSize * 100}cqw`, fontWeight: overlay.bold ? 700 : 400, fontStyle: overlay.italic ? 'italic' : 'normal', textAlign: overlay.align, zIndex: overlay.zIndex }}>{overlay.text}</div>)}
         </div>
       </div>
@@ -63,6 +72,7 @@ export default function App() {
     try { const saved = localStorage.getItem('pagecraft-grid-size'); return saved === 'small' || saved === 'large' ? saved : 'medium' } catch { return 'medium' }
   })
   const [busy, setBusy] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState('')
   const [message, setMessage] = useState<{ key: TranslationKey; variables?: Record<string, string | number> } | null>(null)
   const [toastCount, setToastCount] = useState<number | null>(null)
@@ -71,6 +81,10 @@ export default function App() {
   const [recovery, setRecovery] = useState<RecoverySnapshot | null>(null)
   const [recoveryReady, setRecoveryReady] = useState(false)
   const input = useRef<HTMLInputElement>(null)
+  const importController = useRef<AbortController | null>(null)
+  const thumbnailQueue = useRef<DocumentPage[]>([])
+  const thumbnailQueued = useRef(new Set<string>())
+  const thumbnailActive = useRef(0)
   const lastSelectedIndex = useRef<number | null>(null)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
 
@@ -92,13 +106,30 @@ export default function App() {
   }, [locale])
 
   useEffect(() => {
-    if (!recoveryReady) return
+    if (!recoveryReady || importing) return
     const timer = window.setTimeout(() => {
       const operation = pages.length ? saveRecovery(createSnapshot(pages, settings)) : discardRecovery()
       void operation.catch(() => setMessage({ key: 'recoverySaveFailed' }))
     }, 700)
     return () => window.clearTimeout(timer)
-  }, [pages, recoveryReady, settings])
+  }, [pages, recoveryReady, settings, importing])
+
+  function pumpThumbnails() {
+    while (thumbnailActive.current < appConfig.limits.thumbnailConcurrency && thumbnailQueue.current.length) {
+      const page = thumbnailQueue.current.shift()!
+      thumbnailActive.current++
+      dispatch({ type: 'SET_PAGE_PREVIEW', pageId: page.id, previewUrl: '', status: 'rendering' })
+      void renderPagePreview(page, .45)
+        .then(previewUrl => dispatch({ type: 'SET_PAGE_PREVIEW', pageId: page.id, previewUrl, status: 'ready' }))
+        .catch(() => dispatch({ type: 'SET_PAGE_PREVIEW', pageId: page.id, previewUrl: '', status: 'failed' }))
+        .finally(() => { thumbnailActive.current--; thumbnailQueued.current.delete(page.id); pumpThumbnails() })
+    }
+  }
+
+  function queueThumbnail(page: DocumentPage) {
+    if (page.sourceType !== 'pdf' || page.previewStatus === 'ready' || thumbnailQueued.current.has(page.id)) return
+    thumbnailQueued.current.add(page.id); thumbnailQueue.current.push(page); pumpThumbnails()
+  }
 
   useEffect(() => {
     try { localStorage.setItem('pagecraft-grid-size', gridSize) } catch { /* UI preference persistence is optional. */ }
@@ -137,13 +168,30 @@ export default function App() {
 
   async function addFiles(fileList: FileList | File[]) {
     const files = Array.from(fileList)
-    if (!files.length) return
-    setBusy(true); setProgress(t(files.length === 1 ? 'readingOne' : 'readingMany', { count: files.length })); setMessage(null)
-    const result = await importFiles(files)
-    if (result.pages.length) dispatch({ type: 'ADD_PAGES', pages: result.pages })
-    if (result.errors.length) setMessage({ key: result.errors[0].code === 'unsupported' ? 'unsupportedFile' : 'unreadableFile', variables: { name: result.errors[0].name } })
-    setBusy(false); setProgress('')
+    if (!files.length || importing) return
+    const controller = new AbortController(); importController.current = controller
+    let pagesAdded = 0
+    setBusy(true); setImporting(true); setProgress(t(files.length === 1 ? 'readingOne' : 'readingMany', { count: files.length })); setMessage(null)
+    dispatch({ type: 'BEGIN_IMPORT' })
+    try {
+      const result = await importFiles(files, {
+        signal: controller.signal,
+        onDiscovered: (name, count) => setProgress(t('pagesFound', { name, count })),
+        onBatch: batch => { pagesAdded += batch.length; dispatch({ type: 'ADD_IMPORT_BATCH', pages: batch }); setProgress(t('pagesAdded', { count: pagesAdded })) },
+        confirmLarge: (name, bytes, count) => confirm(t('largePdfWarning', { name, count, size: Math.ceil(bytes / 1048576) })),
+      })
+      dispatch({ type: 'FINISH_IMPORT' })
+      if (result.errors.length) setMessage({ key: result.errors[0].code === 'unsupported' ? 'unsupportedFile' : 'unreadableFile', variables: { name: result.errors[0].name } })
+    } catch (error) {
+      dispatch({ type: 'CANCEL_IMPORT' })
+      thumbnailQueue.current = []; thumbnailQueued.current.clear(); clearViewerRenderCache()
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setMessage({ key: 'importFailed' })
+    } finally {
+      importController.current = null; setBusy(false); setImporting(false); setProgress('')
+    }
   }
+
+  function cancelImport() { importController.current?.abort() }
 
   function edit(id: string, action: PageEdit) {
     const page = pages.find(item => item.id === id)
@@ -227,39 +275,39 @@ export default function App() {
     finally { setBusy(false); setProgress('') }
   }
 
-  return <div className={`app-shell ${sortingPage ? 'sorting-page' : ''}`} onDragOver={event => { event.preventDefault(); setDraggingOver(true) }} onDragLeave={() => setDraggingOver(false)} onDrop={event => { event.preventDefault(); setDraggingOver(false); void addFiles(event.dataTransfer.files) }}>
+  return <div className={`app-shell ${sortingPage ? 'sorting-page' : ''}`} onDragOver={event => { event.preventDefault(); if (!importing) setDraggingOver(true) }} onDragLeave={() => setDraggingOver(false)} onDrop={event => { event.preventDefault(); setDraggingOver(false); if (!importing) void addFiles(event.dataTransfer.files) }}>
     {draggingOver && <div className="drop-overlay"><div>{t('dropAnywhere')}</div></div>}
     <header>
       <a className="brand" href="#"><span className="brand-mark"><Files size={19} /></span><span>{appConfig.branding.name}<small>{appConfig.branding.tagline[locale]}</small></span></a>
-      <div className="privacy"><ShieldCheck size={15} /> {t('private')} <span>{t('filesStay')}</span></div>
       <div className="language-switch" aria-label={t('language')}><button className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')}>EN</button><button className={locale === 'ms-MY' ? 'active' : ''} onClick={() => setLocale('ms-MY')}>BM</button></div>
       <div className="header-actions">
+        {pages.length > 0 && <button className="button ghost" onClick={() => { if (confirm(t('removeEveryPage'))) { clearViewerRenderCache(); dispatch({ type: 'CLEAR' }); setSelectedIds(new Set()); setViewerPageId(null) } }}><Trash2 size={15} /> {t('clear')}</button>}
+        <button className="button dark" disabled={importing} onClick={() => input.current?.click()}><FilePlus2 size={17} /> {t('addFiles')}</button>
         <button className="history-button" disabled={!history.past.length} onClick={() => dispatch({ type: 'UNDO' })} title={`${t('undo')} (Ctrl/Cmd+Z)`}><Undo2 size={17} /></button>
         <button className="history-button" disabled={!history.future.length} onClick={() => dispatch({ type: 'REDO' })} title={`${t('redo')} (Ctrl/Cmd+Shift+Z)`}><Redo2 size={17} /></button>
-        {pages.length > 0 && <button className="button ghost" onClick={() => { if (confirm(t('removeEveryPage'))) { clearViewerRenderCache(); dispatch({ type: 'CLEAR' }); setSelectedIds(new Set()); setViewerPageId(null) } }}><Trash2 size={15} /> {t('clear')}</button>}
-        <button className="button dark" onClick={() => input.current?.click()}><FilePlus2 size={17} /> {t('addFiles')}</button>
         <input ref={input} hidden type="file" multiple accept="image/jpeg,image/png,application/pdf,.jpg,.jpeg,.png,.pdf" onChange={event => { if (event.target.files) void addFiles(event.target.files); event.target.value = '' }} />
       </div>
     </header>
 
     <main>
       <section className="workspace">
-        <div className="workspace-heading"><div><p className="eyebrow">{t('yourDocument')}</p><h1>{t(pages.length ? 'arrangePages' : 'buildPdf')}</h1><p>{t(pages.length ? 'arrangeHelp' : 'emptyHelp')}</p></div>{pages.length > 0 && <div className="count"><strong>{pages.length}</strong><span>{t(pages.length === 1 ? 'page' : 'pages')}</span></div>}</div>
+        <div className="workspace-heading"><div><p className="eyebrow">{t('yourDocument')}</p><h1>{t(pages.length ? 'arrangePages' : 'buildPdf')}</h1>{pages.length ? <p>{t('arrangeHelp')}</p> : <><div className="quick-tutorial" aria-label={t('emptyHelp')}><span><b>1</b>{t('tutorialAdd')}<i aria-hidden="true"><FilePlus2 size={16} /></i></span><span><b>2</b>{t('tutorialArrange')}<i aria-hidden="true"><GripVertical size={16} /></i></span><span><b>3</b>{t('tutorialExport')}<i aria-hidden="true"><Download size={16} /></i></span></div><div className="feature-summary"><strong>{t('featureTitle')}</strong><ul className="feature-list"><li>{t('featureCombine')}</li><li>{t('featureArrange')}</li><li>{t('featureCustomize')}</li><li>{t('featurePrivate')}</li></ul></div></>}</div>{pages.length > 0 && <div className="count"><strong>{pages.length}</strong><span>{t(pages.length === 1 ? 'page' : 'pages')}</span></div>}</div>
         {message && <div className="notice" role="alert">{t(message.key, message.variables)}<button onClick={() => setMessage(null)}>×</button></div>}
+        {importing && <div className="import-progress" role="status"><span>{progress}</span><button onClick={cancelImport}>{t('cancel')}</button></div>}
         {pages.length > 0 && <div className="document-toolbar">
           <div><button onClick={() => setSelectedIds(selectedIds.size === pages.length ? new Set() : new Set(pages.map(page => page.id)))}>{t(selectedIds.size === pages.length ? 'clearSelection' : 'selectAll')}</button><span>{selectedIds.size ? t('selected', { count: selectedIds.size }) : t('selectBatch')}</span></div>
           {selectedIds.size > 0 && <div className="batch-actions"><button onClick={() => batch('rotate')}><RotateCw size={14} /> {t('rotate')}</button><button onClick={() => batch('grayscale')}><ImageIcon size={14} /> {t('grayscale')}</button><button onClick={() => batch('duplicate')}><Files size={14} /> {t('duplicate')}</button><button className="danger" onClick={() => batch('delete')}><Trash2 size={14} /> {t('delete')}</button></div>}
           <div className="grid-picker" aria-label={t('thumbnailSize')}>{(['small', 'medium', 'large'] as const).map(size => <button key={size} className={gridSize === size ? 'active' : ''} onClick={() => setGridSize(size)} title={t(size === 'small' ? 'smallThumbs' : size === 'medium' ? 'mediumThumbs' : 'largeThumbs')}>{size === 'small' ? <Grid3X3 size={15} /> : size === 'medium' ? <Grid2X2 size={15} /> : <ImageIcon size={15} />}</button>)}</div>
         </div>}
-        {!pages.length ? <button className="empty-state" onClick={() => input.current?.click()}><span className="empty-icon"><Plus size={28} /></span><strong>{t('dropFiles')}</strong><span>{t('chooseDevice')}</span><em>{t('formats')}</em></button> :
-          <DndContext sensors={sensors} onDragStart={() => setSortingPage(true)} onDragCancel={() => setSortingPage(false)} onDragEnd={dragEnd}><SortableContext items={pages.map(page => page.id)} strategy={rectSortingStrategy}><div className={`page-grid grid-${gridSize}`}>{pages.map((page, index) => <SortablePage key={page.id} page={page} index={index} checked={selectedIds.has(page.id)} onCheck={event => toggleSelection(index, event.shiftKey)} onOpen={() => setViewerPageId(page.id)} onEdit={action => edit(page.id, action)} />)}<button className="add-card" onClick={() => input.current?.click()}><span><Plus size={23} /></span>{t('addMore')}</button></div></SortableContext></DndContext>}
+        {!pages.length ? <button className="empty-state" onClick={() => input.current?.click()}><span className="empty-icon"><Plus size={28} /></span><strong>{t('dropFiles')}</strong><span>{t('chooseDevice')}</span><em className="file-formats"><span><ImageIcon size={22} /> JPEG</span><span><ImageIcon size={22} /> PNG</span><span><FileText size={22} /> PDF</span><small>{t('multipleWelcome')}</small></em></button> :
+          <DndContext sensors={sensors} onDragStart={() => setSortingPage(true)} onDragCancel={() => setSortingPage(false)} onDragEnd={dragEnd}><SortableContext items={pages.map(page => page.id)} strategy={rectSortingStrategy}><div className={`page-grid grid-${gridSize}`}>{pages.map((page, index) => <SortablePage key={page.id} page={page} index={index} checked={selectedIds.has(page.id)} onCheck={event => toggleSelection(index, event.shiftKey)} onOpen={() => { queueThumbnail(page); setViewerPageId(page.id) }} onEdit={action => edit(page.id, action)} onVisible={queueThumbnail} />)}<button className="add-card" onClick={() => input.current?.click()}><span><Plus size={23} /></span>{t('addMore')}<div className="add-card-formats" aria-label={t('formats')}><small><ImageIcon size={15} /> JPEG</small><small><ImageIcon size={15} /> PNG</small><small><FileText size={15} /> PDF</small></div></button></div></SortableContext></DndContext>}
       </section>
 
       <aside className="export-panel">
         <div><p className="eyebrow">{t('exportSettings')}</p><h2>{t('makeItYours')}</h2></div>
         <label>{t('pageSize')}<select value={settings.mode} onChange={event => setSettings({ ...settings, mode: event.target.value as ExportSettings['mode'] })}><option value="original">{t('fitEach')}</option><option value="a4">{t('a4')}</option><option value="letter">{t('letter')}</option></select></label>
         {settings.mode !== 'original' && <><label>{t('orientation')}<div className="segmented">{(['auto', 'portrait', 'landscape'] as const).map(value => <button key={value} className={settings.orientation === value ? 'active' : ''} onClick={() => setSettings({ ...settings, orientation: value })}>{t(value)}</button>)}</div></label><label>{t('margins')}<div className="segmented">{(['none', 'narrow', 'normal'] as const).map(value => <button key={value} className={settings.margin === value ? 'active' : ''} onClick={() => setSettings({ ...settings, margin: value })}>{t(value)}</button>)}</div></label></>}
-        <fieldset><legend>{t('exportQuality')}</legend>{(['small', 'balanced', 'best'] as const).map(value => <label className={`quality ${settings.quality === value ? 'selected' : ''}`} key={value}><input type="radio" checked={settings.quality === value} onChange={() => setSettings({ ...settings, quality: value })} /><span><strong>{t(value)}</strong><small>{t(value === 'small' ? 'emailSharing' : value === 'balanced' ? 'everyday' : 'printArchive')}</small></span>{value === 'balanced' && <em>{t('recommended')}</em>}</label>)}</fieldset>
+        <fieldset><legend>{t('exportQuality')}</legend>{(['small', 'balanced', 'best'] as const).map(value => <label className={`quality ${settings.quality === value ? 'selected' : ''}`} key={value}><input type="radio" checked={settings.quality === value} onChange={() => setSettings({ ...settings, quality: value })} /><span className="quality-icon" aria-hidden="true">{value === 'small' ? <Mail size={18} /> : value === 'balanced' ? <Scale size={18} /> : <Printer size={18} />}</span><span><strong>{t(value)}</strong><small>{t(value === 'small' ? 'emailSharing' : value === 'balanced' ? 'everyday' : 'printArchive')}</small></span>{value === 'balanced' && <em>{t('recommended')}</em>}</label>)}</fieldset>
         <label>{t('fileName')}<div className="filename"><input value={settings.filename} onChange={event => setSettings({ ...settings, filename: event.target.value.replace(/[\\/:*?"<>|]/g, '') })} /><span>.pdf</span></div></label>
         <div className="summary"><span>{pages.length} {t(pages.length === 1 ? 'page' : 'pages')}</span><span>{estimate ? t('estimated', { size: estimate }) : '—'}</span></div>
         <button className="export-button" disabled={!pages.length || busy} onClick={() => void download()}><span>{busy ? progress : t('exportPdf')}</span><b>{busy ? <Sparkles size={18} /> : <Download size={18} />}</b></button>
@@ -270,6 +318,6 @@ export default function App() {
     {recovery && <div className="recovery-backdrop"><section className="recovery-dialog" role="dialog" aria-modal="true" aria-labelledby="recovery-title"><span className="recovery-icon"><History size={27} /></span><p className="eyebrow">{t('recovery')}</p><h2 id="recovery-title">{t('pickUp')}</h2><p>{t('recoveryFound', { count: recovery.pages.length, pages: t(recovery.pages.length === 1 ? 'page' : 'pages'), date: formatDate(new Date(recovery.savedAt)) })}</p><div><button className="button ghost" onClick={() => void discardSavedProject()}>{t('discard')}</button><button className="button dark" onClick={() => void restoreProject()}>{t('restoreProject')}</button></div></section></div>}
     {toastCount !== null && <div className="undo-toast" role="status"><span>{t(toastCount === 1 ? 'deletedOne' : 'deletedMany', { count: toastCount })}</span><button onClick={() => { dispatch({ type: 'UNDO' }); setToastCount(null) }}>{t('undo')}</button><button aria-label={t('dismiss')} onClick={() => setToastCount(null)}><X size={15} /></button></div>}
     {viewerPageId && <PageViewer pages={pages} pageId={viewerPageId} onPageChange={setViewerPageId} onEdit={edit} onDelete={deleteFromViewer} onAddText={addText} onUpdateText={updateText} onDeleteText={deleteText} onDuplicateText={duplicateText} onAddImages={addImages} onUpdateImage={updateImage} onDeleteImage={deleteImage} onDuplicateImage={duplicateImage} onMoveImageLayer={moveImageLayer} onClose={() => setViewerPageId(null)} />}
-    <footer><span>{appConfig.branding.name}</span><p>{t('footer')}</p><small>{t('footerNote')}</small></footer>
+    <footer><div className="footer-brand"><span>{appConfig.branding.name}</span><small>v{appConfig.version} · <a href="https://alexmarcel.com" target="_blank" rel="noreferrer">alexmarcel.com</a></small></div><p>{t('footer')}</p><small>{t('footerNote')}</small></footer>
   </div>
 }

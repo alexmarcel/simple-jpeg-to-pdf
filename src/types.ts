@@ -56,6 +56,7 @@ export interface DocumentPage {
   sourcePage?: number
   bytes: Uint8Array
   previewUrl: string
+  previewStatus?: 'pending' | 'rendering' | 'ready' | 'failed'
   width: number
   height: number
   rotation: 0 | 90 | 180 | 270
@@ -70,6 +71,8 @@ export interface HistoryState {
   past: DocumentState[]
   present: DocumentState
   future: DocumentState[]
+  /** Baseline retained while pages are progressively committed. */
+  importBaseline?: DocumentState
 }
 
 export type PageEdit = 'rotate' | 'grayscale' | 'duplicate' | 'remove'
@@ -92,6 +95,11 @@ export type DocumentAction =
   | { type: 'DUPLICATE_IMAGE'; pageId: string; overlayId: string }
   | { type: 'MOVE_IMAGE_LAYER'; pageId: string; overlayId: string; direction: 'forward' | 'backward' }
   | { type: 'RESET'; pages: DocumentPage[] }
+  | { type: 'BEGIN_IMPORT' }
+  | { type: 'ADD_IMPORT_BATCH'; pages: DocumentPage[] }
+  | { type: 'FINISH_IMPORT' }
+  | { type: 'CANCEL_IMPORT' }
+  | { type: 'SET_PAGE_PREVIEW'; pageId: string; previewUrl: string; status: 'ready' | 'failed' | 'rendering' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
 

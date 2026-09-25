@@ -26,6 +26,26 @@ describe('documentHistoryReducer', () => {
     expect(changed.future).toHaveLength(0)
   })
 
+  it('commits a progressive import as one undoable action', () => {
+    let state = documentHistoryReducer(initialHistory, { type: 'RESET', pages: [page('existing')] })
+    state = documentHistoryReducer(state, { type: 'BEGIN_IMPORT' })
+    state = documentHistoryReducer(state, { type: 'ADD_IMPORT_BATCH', pages: [page('a'), page('b')] })
+    state = documentHistoryReducer(state, { type: 'ADD_IMPORT_BATCH', pages: [page('c')] })
+    state = documentHistoryReducer(state, { type: 'FINISH_IMPORT' })
+    expect(state.past).toHaveLength(1)
+    expect(documentHistoryReducer(state, { type: 'UNDO' }).present.pages.map(item => item.id)).toEqual(['existing'])
+  })
+
+  it('rolls back a cancelled import and keeps preview updates out of history', () => {
+    let state = documentHistoryReducer(initialHistory, { type: 'RESET', pages: [page('existing')] })
+    state = documentHistoryReducer(state, { type: 'BEGIN_IMPORT' })
+    state = documentHistoryReducer(state, { type: 'ADD_IMPORT_BATCH', pages: [page('pending')] })
+    state = documentHistoryReducer(state, { type: 'SET_PAGE_PREVIEW', pageId: 'pending', previewUrl: 'blob:preview', status: 'ready' })
+    expect(state.past).toHaveLength(0)
+    state = documentHistoryReducer(state, { type: 'CANCEL_IMPORT' })
+    expect(state.present.pages.map(item => item.id)).toEqual(['existing'])
+  })
+
   it('limits history to fifty actions', () => {
     let state = initialHistory
     for (let index = 0; index < appConfig.limits.undoHistory + 10; index++) state = documentHistoryReducer(state, { type: 'ADD_PAGES', pages: [page(String(index))] })

@@ -6,6 +6,8 @@
  * this file is bundled into JavaScript and is visible to every visitor.
  */
 export interface AppConfig {
+  /** Public application version displayed in the footer. */
+  version: string
   branding: {
     /** Application name shown in the header, footer, and browser title. */
     name: string
@@ -28,12 +30,16 @@ export interface AppConfig {
     undoHistory: number
     /** Maximum pixel count for a high-resolution PDF viewer canvas. */
     viewerRenderPixels: number
+    largeImportBytes: number
+    largeImportPages: number
+    thumbnailConcurrency: number
   }
 }
 
 const appConfig = {
+  version: '1.0.0',
   branding: {
-    name: 'BikinPDF',
+    name: 'EditPDF',
     tagline: {
       en: 'PDF maker',
       'ms-MY': 'Pembina PDF',
@@ -54,6 +60,9 @@ const appConfig = {
   limits: {
     undoHistory: 50,
     viewerRenderPixels: 16_000_000,
+    largeImportBytes: 100 * 1024 * 1024,
+    largeImportPages: 250,
+    thumbnailConcurrency: 2,
   },
 } satisfies AppConfig
 

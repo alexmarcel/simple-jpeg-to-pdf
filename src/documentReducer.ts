@@ -5,7 +5,9 @@ import appConfig from './app.config'
 export const initialHistory: HistoryState = { past: [], present: { pages: [] }, future: [] }
 const HISTORY_LIMIT = appConfig.limits.undoHistory
 
-function update(state: DocumentState, action: Exclude<DocumentAction, { type: 'UNDO' | 'REDO' | 'RESET' }>): DocumentState {
+type EditingAction = Exclude<DocumentAction, { type: 'UNDO' | 'REDO' | 'RESET' | 'BEGIN_IMPORT' | 'ADD_IMPORT_BATCH' | 'FINISH_IMPORT' | 'CANCEL_IMPORT' | 'SET_PAGE_PREVIEW' }>
+
+function update(state: DocumentState, action: EditingAction): DocumentState {
   const pages = state.pages
   switch (action.type) {
     case 'ADD_PAGES': return { pages: [...pages, ...action.pages] }
@@ -64,6 +66,15 @@ function update(state: DocumentState, action: Exclude<DocumentAction, { type: 'U
 
 export function documentHistoryReducer(history: HistoryState, action: DocumentAction): HistoryState {
   if (action.type === 'RESET') return { past: [], present: { pages: action.pages }, future: [] }
+  if (action.type === 'BEGIN_IMPORT') return history.importBaseline ? history : { ...history, importBaseline: history.present }
+  if (action.type === 'ADD_IMPORT_BATCH') return { ...history, present: { pages: [...history.present.pages, ...action.pages] } }
+  if (action.type === 'CANCEL_IMPORT') return history.importBaseline ? { ...history, present: history.importBaseline, importBaseline: undefined } : history
+  if (action.type === 'FINISH_IMPORT') {
+    if (!history.importBaseline) return history
+    if (history.present.pages.length === history.importBaseline.pages.length) return { ...history, importBaseline: undefined }
+    return { past: [...history.past, history.importBaseline].slice(-HISTORY_LIMIT), present: history.present, future: [], importBaseline: undefined }
+  }
+  if (action.type === 'SET_PAGE_PREVIEW') return { ...history, present: { pages: history.present.pages.map(page => page.id === action.pageId ? { ...page, previewUrl: action.previewUrl, previewStatus: action.status } : page) } }
   if (action.type === 'UNDO') {
     const previous = history.past.at(-1)
     if (!previous) return history

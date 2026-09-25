@@ -7,11 +7,30 @@ import appConfig from './app.config'
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
 const viewerRenderCache = new Map<string, string>()
+const pdfDocumentCache = new Map<string, Promise<pdfjsLib.PDFDocumentProxy>>()
 const MAX_VIEWER_PIXELS = appConfig.limits.viewerRenderPixels
+const MAX_RENDER_CACHE_ENTRIES = 32
+
+function abortError() { return new DOMException('Import cancelled', 'AbortError') }
+function throwIfAborted(signal?: AbortSignal) { if (signal?.aborted) throw abortError() }
+
+function cachedPdf(page: DocumentPage) {
+  let document = pdfDocumentCache.get(page.sourceId)
+  if (!document) {
+    document = pdfjsLib.getDocument({ data: page.bytes.slice() }).promise
+    pdfDocumentCache.set(page.sourceId, document)
+  }
+  return document
+}
 
 export function clearViewerRenderCache(pageId?: string) {
-  if (!pageId) viewerRenderCache.clear()
-  else for (const key of viewerRenderCache.keys()) if (key.startsWith(`${pageId}:`)) viewerRenderCache.delete(key)
+  if (!pageId) {
+    for (const url of viewerRenderCache.values()) URL.revokeObjectURL(url)
+    viewerRenderCache.clear()
+    for (const document of pdfDocumentCache.values()) void document.then(pdf => pdf.destroy()).catch(() => undefined)
+    pdfDocumentCache.clear()
+  }
+  else for (const key of viewerRenderCache.keys()) if (key.startsWith(`${pageId}:`)) { URL.revokeObjectURL(viewerRenderCache.get(key)!); viewerRenderCache.delete(key) }
 }
 
 export async function renderPagePreview(page: DocumentPage, targetScale: number, signal?: AbortSignal): Promise<string> {
@@ -19,10 +38,10 @@ export async function renderPagePreview(page: DocumentPage, targetScale: number,
   const scaleBucket = Math.max(.75, Math.min(4, Math.ceil(targetScale * 2) / 2))
   const key = `${page.id}:${scaleBucket}`
   const cached = viewerRenderCache.get(key)
-  if (cached) return cached
+  if (cached) { viewerRenderCache.delete(key); viewerRenderCache.set(key, cached); return cached }
   if (signal?.aborted) throw new DOMException('Rendering cancelled', 'AbortError')
-  const pdf = await pdfjsLib.getDocument({ data: page.bytes.slice() }).promise
-  try {
+  const pdf = await cachedPdf(page)
+  {
     const pdfPage = await pdf.getPage((page.sourcePage ?? 0) + 1)
     let viewport = pdfPage.getViewport({ scale: scaleBucket })
     const pixels = viewport.width * viewport.height
@@ -32,13 +51,19 @@ export async function renderPagePreview(page: DocumentPage, targetScale: number,
     canvas.height = Math.max(1, Math.floor(viewport.height))
     const context = canvas.getContext('2d')
     if (!context) throw new Error('Canvas is unavailable')
-    await pdfPage.render({ canvas, canvasContext: context, viewport }).promise
+    const task = pdfPage.render({ canvas, canvasContext: context, viewport })
+    const cancel = () => task.cancel()
+    signal?.addEventListener('abort', cancel, { once: true })
+    try { await task.promise } finally { signal?.removeEventListener('abort', cancel) }
     if (signal?.aborted) throw new DOMException('Rendering cancelled', 'AbortError')
-    const result = canvas.toDataURL('image/jpeg', .9)
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Preview encoding failed')), 'image/jpeg', .9))
+    const result = URL.createObjectURL(blob)
     viewerRenderCache.set(key, result)
+    while (viewerRenderCache.size > MAX_RENDER_CACHE_ENTRIES) {
+      const oldest = viewerRenderCache.keys().next().value!
+      URL.revokeObjectURL(viewerRenderCache.get(oldest)!); viewerRenderCache.delete(oldest)
+    }
     return result
-  } finally {
-    await pdf.destroy()
   }
 }
 
@@ -117,15 +142,33 @@ async function overlayPng(page: DocumentPage): Promise<Uint8Array> {
 }
 
 export interface ImportFailure { code: 'unsupported' | 'unreadable'; name: string }
-export async function importFiles(files: File[]): Promise<{ pages: DocumentPage[]; errors: ImportFailure[] }> {
+export interface ImportOptions {
+  signal?: AbortSignal
+  batchSize?: number
+  onBatch?: (pages: DocumentPage[]) => void
+  onDiscovered?: (name: string, pages: number) => void
+  confirmLarge?: (name: string, bytes: number, pages: number) => boolean | Promise<boolean>
+}
+export async function importFiles(files: File[], options: ImportOptions = {}): Promise<{ pages: DocumentPage[]; errors: ImportFailure[] }> {
   const pages: DocumentPage[] = []
   const errors: ImportFailure[] = []
   for (const file of files) {
+    throwIfAborted(options.signal)
     try {
-      if (file.type === 'image/jpeg' || file.type === 'image/png') pages.push(await imagePage(file))
-      else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) pages.push(...await pdfPages(file))
+      let imported: DocumentPage[] = []
+      let emitted = false
+      if (file.type === 'image/jpeg' || file.type === 'image/png') imported = [await imagePage(file)]
+      else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) { imported = await pdfPages(file, options); emitted = true }
       else errors.push({ code: 'unsupported', name: file.name })
-    } catch {
+      pages.push(...imported)
+      const size = Math.max(1, options.batchSize ?? 25)
+      for (let index = 0; !emitted && index < imported.length; index += size) {
+        throwIfAborted(options.signal)
+        options.onBatch?.(imported.slice(index, index + size))
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error
       errors.push({ code: 'unreadable', name: file.name })
     }
   }
@@ -137,25 +180,33 @@ async function imagePage(file: File): Promise<DocumentPage> {
   const sourceId = crypto.randomUUID()
   const previewUrl = URL.createObjectURL(file)
   const bitmap = await createImageBitmap(file)
-  const page: DocumentPage = { id: crypto.randomUUID(), sourceId, name: file.name, sourceType: 'image', bytes, previewUrl, width: bitmap.width, height: bitmap.height, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] }
+  const page: DocumentPage = { id: crypto.randomUUID(), sourceId, name: file.name, sourceType: 'image', bytes, previewUrl, previewStatus: 'ready', width: bitmap.width, height: bitmap.height, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] }
   bitmap.close()
   return page
 }
 
-async function pdfPages(file: File): Promise<DocumentPage[]> {
+async function pdfPages(file: File, options: ImportOptions): Promise<DocumentPage[]> {
   const bytes = new Uint8Array(await file.arrayBuffer())
+  throwIfAborted(options.signal)
   const sourceId = crypto.randomUUID()
   const pdf = await pdfjsLib.getDocument({ data: bytes.slice() }).promise
+  options.onDiscovered?.(file.name, pdf.numPages)
+  if ((file.size >= appConfig.limits.largeImportBytes || pdf.numPages >= appConfig.limits.largeImportPages) && options.confirmLarge && !await options.confirmLarge(file.name, file.size, pdf.numPages)) {
+    await pdf.destroy(); throw abortError()
+  }
   const result: DocumentPage[] = []
+  let pending: DocumentPage[] = []
+  const batchSize = Math.max(1, options.batchSize ?? 25)
   for (let n = 1; n <= pdf.numPages; n++) {
+    throwIfAborted(options.signal)
     const page = await pdf.getPage(n)
-    const viewport = page.getViewport({ scale: 0.45 })
-    const canvas = document.createElement('canvas')
-    canvas.width = viewport.width
-    canvas.height = viewport.height
-    const context = canvas.getContext('2d')!
-    await page.render({ canvas, canvasContext: context, viewport }).promise
-    result.push({ id: crypto.randomUUID(), sourceId, name: file.name, sourceType: 'pdf', sourcePage: n - 1, bytes, previewUrl: canvas.toDataURL('image/jpeg', 0.76), width: viewport.width / 0.45, height: viewport.height / 0.45, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] })
+    const viewport = page.getViewport({ scale: 1 })
+    const descriptor: DocumentPage = { id: crypto.randomUUID(), sourceId, name: file.name, sourceType: 'pdf', sourcePage: n - 1, bytes, previewUrl: '', previewStatus: 'pending', width: viewport.width, height: viewport.height, rotation: 0, grayscale: false, textOverlays: [], imageOverlays: [] }
+    result.push(descriptor); pending.push(descriptor)
+    if (pending.length === batchSize || n === pdf.numPages) {
+      options.onBatch?.(pending); pending = []
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+    }
   }
   await pdf.destroy()
   return result

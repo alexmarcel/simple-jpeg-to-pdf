@@ -86,6 +86,7 @@ export async function hydrateRecovery(snapshot: RecoverySnapshot): Promise<Docum
     })
     const base: DocumentPage = { ...stored, textOverlays: (stored.textOverlays ?? []).map((overlay, index) => ({ ...overlay, backgroundColor: overlay.backgroundColor ?? null, backgroundOpacity: overlay.backgroundOpacity ?? 1, padding: overlay.padding ?? .01, borderRadius: overlay.borderRadius ?? .01, zIndex: overlay.zIndex ?? 1000 + index })), imageOverlays, bytes: source.bytes, previewUrl: '' }
     base.previewUrl = source.type === 'image' ? URL.createObjectURL(new Blob([source.bytes as BlobPart], { type: mime })) : await renderPagePreview(base, .75)
+    base.previewStatus = 'ready'
     pages.push(base)
   }
   return pages
