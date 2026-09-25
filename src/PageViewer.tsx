@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from 'react'
 import { AlignCenter, AlignLeft, AlignRight, Bold, BringToFront, ChevronLeft, ChevronRight, Copy, Crop, Image as ImageIcon, ImagePlus, Italic, Maximize2, Minus, PaintBucket, Pipette, Plus, RotateCw, SendToBack, TextCursorInput, Trash2, X } from 'lucide-react'
-import { renderPagePreview } from './pdf'
+import { fileLimitFailure, imagePixelLimitFailure, projectByteSize, renderPagePreview, shouldWarnForFile, type ImportFailureCode } from './pdf'
 import type { DocumentPage, ImageOverlay, TextOverlay } from './types'
 import { cropAtZoom, cropZoom, frameAtAspect, panCrop, type CropFrame } from './crop'
 import { useI18n } from './i18n'
@@ -334,14 +334,24 @@ export default function PageViewer({ pages, pageId, onPageChange, onEdit, onDele
   async function insertImages(files: FileList) {
     const accepted = Array.from(files).filter(file => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
     const overlays: ImageOverlay[] = []
+    const errorKeys: Record<ImportFailureCode, 'fileTooLarge' | 'tooManyPages' | 'imageTooLarge' | 'projectTooLarge' | 'unsupportedFile' | 'unreadableFile'> = { unsupported: 'unsupportedFile', unreadable: 'unreadableFile', 'file-too-large': 'fileTooLarge', 'too-many-pages': 'tooManyPages', 'image-too-large': 'imageTooLarge', 'project-too-large': 'projectTooLarge' }
+    let addedBytes = 0
     let zIndex = Math.max(0, ...page.imageOverlays.map(item => item.zIndex))
     for (const file of accepted) {
+      const byteFailure = fileLimitFailure(file.size, projectByteSize(pages) + addedBytes)
+      if (byteFailure) { alert(t(errorKeys[byteFailure], { name: file.name })); continue }
+      if (shouldWarnForFile(file.size) && !confirm(t('largeFileWarning', { name: file.name, size: Math.ceil(file.size / 1048576) }))) continue
+      let bitmap: ImageBitmap | null = null
       try {
-        const bytes = new Uint8Array(await file.arrayBuffer()), bitmap = await createImageBitmap(file)
+        bitmap = await createImageBitmap(file)
+        const pixelFailure = imagePixelLimitFailure(bitmap.width, bitmap.height)
+        if (pixelFailure) { alert(t(errorKeys[pixelFailure], { name: file.name })); continue }
+        const bytes = new Uint8Array(await file.arrayBuffer())
         const width = .34, height = Math.min(.45, width * page.width / (bitmap.width / bitmap.height) / page.height)
         overlays.push({ id: crypto.randomUUID(), assetId: crypto.randomUUID(), name: file.name, mimeType: file.type as ImageOverlay['mimeType'], bytes, previewUrl: URL.createObjectURL(file), naturalWidth: bitmap.width, naturalHeight: bitmap.height, x: .5 - width / 2, y: .5 - height / 2, width, height, cropX: 0, cropY: 0, cropWidth: 1, cropHeight: 1, opacity: 1, grayscale: false, zIndex: ++zIndex })
-        bitmap.close()
-      } catch { /* Ignore an individual image that the browser cannot decode. */ }
+        addedBytes += file.size
+      } catch { alert(t('unreadableFile', { name: file.name })) }
+      finally { bitmap?.close() }
     }
     if (overlays.length) { onAddImages(page.id, overlays); setSelectedImageId(overlays.at(-1)!.id); setSelectedTextId(null) }
   }

@@ -27,7 +27,7 @@ ROSES PDF is a privacy-focused browser application for resizing, organizing, spl
 Document processing happens locally in the browser:
 
 - Files are decoded and rendered on the user's device.
-- Editing state and recovery data are stored in IndexedDB.
+- Editing state and recovery data are stored in IndexedDB and expire after 24 hours.
 - Interface preferences are stored in localStorage.
 - PDF generation and downloading happen entirely on the client.
 
@@ -64,6 +64,7 @@ It controls:
 - First-visit language
 - Default PDF filename, page size, orientation, margins, and quality
 - Undo-history and viewer-rendering limits
+- Import warning thresholds, hard file/page/pixel limits, and the total project byte limit
 
 To change deployment settings:
 
@@ -127,6 +128,7 @@ Production files are generated in `dist/` and can be served by any static web ho
 - Rotation, grayscale, or other raster edits can rasterize an imported PDF page during export.
 - Text and image overlays remain visual layers rather than selectable PDF text or objects.
 - Very large files and projects are constrained by available browser memory and storage.
+- Imports warn at 100 MB or 500 PDF pages and reject files above 500 MB, PDFs above 2,000 pages, images above 100 megapixels, or projects above 1 GiB of unique source data.
 - Viewer zoom changes only the preview and does not affect export quality.
 
 ## Roadmap

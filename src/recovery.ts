@@ -1,5 +1,6 @@
 import { renderPagePreview } from './pdf'
 import type { DocumentPage, ExportSettings, ImageOverlay, SourceType } from './types'
+import appConfig from './app.config'
 
 const DB_NAME = 'pagecraft-recovery'
 const STORE_NAME = 'projects'
@@ -65,8 +66,27 @@ export async function saveRecovery(snapshot: RecoverySnapshot) { await transact(
 
 export async function loadRecovery(): Promise<RecoverySnapshot | null> {
   const snapshot = await transact<RecoverySnapshot | undefined>('readonly', store => store.get(SNAPSHOT_KEY))
-  if (!snapshot || ![1, 2, 3].includes(snapshot.version) || !Array.isArray(snapshot.pages) || !Array.isArray(snapshot.sources)) return null
+  if (!isValidRecoverySnapshot(snapshot) || isRecoveryExpired(snapshot)) {
+    if (snapshot) await discardRecovery()
+    return null
+  }
   return snapshot
+}
+
+export function isValidRecoverySnapshot(snapshot: unknown): snapshot is RecoverySnapshot {
+  if (!snapshot || typeof snapshot !== 'object') return false
+  const candidate = snapshot as Partial<RecoverySnapshot>
+  const settings = candidate.settings
+  if (![1, 2, 3].includes(candidate.version ?? 0) || typeof candidate.savedAt !== 'number' || !Number.isFinite(candidate.savedAt) || !Array.isArray(candidate.pages) || !Array.isArray(candidate.sources) || !settings) return false
+  if (!['original', 'a4', 'letter'].includes(settings.mode) || !['auto', 'portrait', 'landscape'].includes(settings.orientation) || !['none', 'narrow', 'normal'].includes(settings.margin) || !['small', 'balanced', 'best', 'originalQuality'].includes(settings.quality) || typeof settings.filename !== 'string') return false
+  const validSources = candidate.sources.every(source => source && typeof source.id === 'string' && typeof source.name === 'string' && ['image', 'pdf'].includes(source.type) && source.bytes instanceof Uint8Array)
+  const sourceIds = new Set(candidate.sources.map(source => source.id))
+  const validPages = candidate.pages.every(page => page && typeof page.id === 'string' && typeof page.sourceId === 'string' && sourceIds.has(page.sourceId) && typeof page.name === 'string' && ['image', 'pdf'].includes(page.sourceType) && Number.isFinite(page.width) && Number.isFinite(page.height) && Array.isArray(page.textOverlays))
+  return validSources && validPages
+}
+
+export function isRecoveryExpired(snapshot: Pick<RecoverySnapshot, 'savedAt'>, now = Date.now()): boolean {
+  return snapshot.savedAt > now || now - snapshot.savedAt >= appConfig.limits.recoveryMaxAgeMs
 }
 
 export async function discardRecovery() { await transact('readwrite', store => store.delete(SNAPSHOT_KEY)) }

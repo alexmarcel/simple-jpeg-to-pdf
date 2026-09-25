@@ -4,7 +4,7 @@ import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sort
 import { CSS } from '@dnd-kit/utilities'
 import { Check, Download, Eye, FilePlus2, Files, FileText, GripVertical, Grid2X2, Grid3X3, History, Image as ImageIcon, Mail, Plus, Printer, Redo2, RefreshCw, RotateCw, Scale, ShieldCheck, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { documentHistoryReducer, initialHistory } from './documentReducer'
-import { clearViewerRenderCache, exportPdf, importFiles, renderPagePreview } from './pdf'
+import { clearViewerRenderCache, exportPdf, importFiles, projectByteSize, renderPagePreview, type ImportFailureCode } from './pdf'
 import { createSnapshot, discardRecovery, hydrateRecovery, loadRecovery, saveRecovery, type RecoverySnapshot } from './recovery'
 import type { DocumentPage, ExportSettings, ImageOverlay, PageEdit, TextOverlay } from './types'
 import PageViewer from './PageViewer'
@@ -15,6 +15,7 @@ type GridSize = 'small' | 'medium' | 'large'
 
 const defaultSettings: ExportSettings = { mode: appConfig.exportDefaults.pageMode, orientation: appConfig.exportDefaults.orientation, margin: appConfig.exportDefaults.margin, quality: appConfig.exportDefaults.quality, filename: appConfig.exportDefaults.filename }
 const colorWithOpacity = (hex: string | null, opacity: number) => hex ? `${hex}${Math.round(Math.max(0, Math.min(1, opacity)) * 255).toString(16).padStart(2, '0')}` : 'transparent'
+const importErrorKeys: Record<ImportFailureCode, TranslationKey> = { unsupported: 'unsupportedFile', unreadable: 'unreadableFile', 'file-too-large': 'fileTooLarge', 'too-many-pages': 'tooManyPages', 'image-too-large': 'imageTooLarge', 'project-too-large': 'projectTooLarge' }
 
 interface SortablePageProps {
   page: DocumentPage
@@ -176,12 +177,13 @@ export default function App() {
     try {
       const result = await importFiles(files, {
         signal: controller.signal,
+        existingBytes: projectByteSize(pages),
         onDiscovered: (name, count) => setProgress(t('pagesFound', { name, count })),
         onBatch: batch => { pagesAdded += batch.length; dispatch({ type: 'ADD_IMPORT_BATCH', pages: batch }); setProgress(t('pagesAdded', { count: pagesAdded })) },
-        confirmLarge: (name, bytes, count) => confirm(t('largePdfWarning', { name, count, size: Math.ceil(bytes / 1048576) })),
+        confirmLarge: (name, bytes, count) => confirm(t(count === undefined ? 'largeFileWarning' : 'largePdfWarning', { name, count: count ?? 0, size: Math.ceil(bytes / 1048576) })),
       })
       dispatch({ type: 'FINISH_IMPORT' })
-      if (result.errors.length) setMessage({ key: result.errors[0].code === 'unsupported' ? 'unsupportedFile' : 'unreadableFile', variables: { name: result.errors[0].name } })
+      if (result.errors.length) setMessage({ key: importErrorKeys[result.errors[0].code], variables: { name: result.errors[0].name } })
     } catch (error) {
       dispatch({ type: 'CANCEL_IMPORT' })
       thumbnailQueue.current = []; thumbnailQueued.current.clear(); clearViewerRenderCache()
@@ -269,6 +271,14 @@ export default function App() {
 
   async function discardSavedProject() { await discardRecovery().catch(() => undefined); setRecovery(null); setRecoveryReady(true) }
 
+  async function clearProject() {
+    if (!confirm(t('removeEveryPage'))) return
+    setRecoveryReady(false)
+    await discardRecovery().catch(() => undefined)
+    clearViewerRenderCache(); dispatch({ type: 'CLEAR' }); setSelectedIds(new Set()); setViewerPageId(null); setRecovery(null)
+    setRecoveryReady(true)
+  }
+
   async function download() {
     if (!pages.length || busy) return
     setBusy(true); setMessage(null); setProgress(t('preparing', { done: 1, total: pages.length }))
@@ -286,7 +296,7 @@ export default function App() {
       <a className="brand" href="#"><span className="brand-mark"><Files size={19} /></span><span>{appConfig.branding.name}<small>{appConfig.branding.tagline[locale]}</small></span></a>
       <div className="language-switch" aria-label={t('language')}><button className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')}>EN</button><button className={locale === 'ms-MY' ? 'active' : ''} onClick={() => setLocale('ms-MY')}>BM</button></div>
       <div className="header-actions">
-        {pages.length > 0 && <button className="button ghost" onClick={() => { if (confirm(t('removeEveryPage'))) { clearViewerRenderCache(); dispatch({ type: 'CLEAR' }); setSelectedIds(new Set()); setViewerPageId(null) } }}><Trash2 size={15} /> {t('clear')}</button>}
+        {pages.length > 0 && <button className="button ghost" onClick={() => void clearProject()}><Trash2 size={15} /> {t('clear')}</button>}
         <button className="button dark" disabled={importing} onClick={() => input.current?.click()}><FilePlus2 size={17} /> {t('addFiles')}</button>
         <button className="history-button" disabled={!history.past.length} onClick={() => dispatch({ type: 'UNDO' })} title={`${t('undo')} (Ctrl/Cmd+Z)`}><Undo2 size={17} /></button>
         <button className="history-button" disabled={!history.future.length} onClick={() => dispatch({ type: 'REDO' })} title={`${t('redo')} (Ctrl/Cmd+Shift+Z)`}><Redo2 size={17} /></button>

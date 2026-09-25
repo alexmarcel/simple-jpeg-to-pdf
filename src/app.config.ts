@@ -30,8 +30,13 @@ export interface AppConfig {
     undoHistory: number
     /** Maximum pixel count for a high-resolution PDF viewer canvas. */
     viewerRenderPixels: number
-    largeImportBytes: number
-    largeImportPages: number
+    importWarningBytes: number
+    importWarningPages: number
+    maxFileBytes: number
+    maxPdfPages: number
+    maxImagePixels: number
+    maxProjectBytes: number
+    recoveryMaxAgeMs: number
     thumbnailConcurrency: number
   }
 }
@@ -60,8 +65,13 @@ const appConfig = {
   limits: {
     undoHistory: 50,
     viewerRenderPixels: 16_000_000,
-    largeImportBytes: 100 * 1024 * 1024,
-    largeImportPages: 250,
+    importWarningBytes: 100 * 1024 * 1024,
+    importWarningPages: 500,
+    maxFileBytes: 500 * 1024 * 1024,
+    maxPdfPages: 2_000,
+    maxImagePixels: 100_000_000,
+    maxProjectBytes: 1024 * 1024 * 1024,
+    recoveryMaxAgeMs: 24 * 60 * 60 * 1000,
     thumbnailConcurrency: 2,
   },
 } satisfies AppConfig
