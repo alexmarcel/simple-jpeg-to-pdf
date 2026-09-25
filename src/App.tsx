@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState, type MouseEvent } fro
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, useSortable, rectSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Check, Download, Eye, FilePlus2, Files, FileText, GripVertical, Grid2X2, Grid3X3, History, Image as ImageIcon, Mail, Plus, Printer, Redo2, RotateCw, Scale, ShieldCheck, Sparkles, Trash2, Undo2, X } from 'lucide-react'
+import { Check, Download, Eye, FilePlus2, Files, FileText, GripVertical, Grid2X2, Grid3X3, History, Image as ImageIcon, Mail, Plus, Printer, Redo2, RefreshCw, RotateCw, Scale, ShieldCheck, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { documentHistoryReducer, initialHistory } from './documentReducer'
 import { clearViewerRenderCache, exportPdf, importFiles, renderPagePreview } from './pdf'
 import { createSnapshot, discardRecovery, hydrateRecovery, loadRecovery, saveRecovery, type RecoverySnapshot } from './recovery'
@@ -234,6 +234,11 @@ export default function App() {
     lastSelectedIndex.current = index
   }
 
+  function invertSelection() {
+    setSelectedIds(current => new Set(pages.filter(page => !current.has(page.id)).map(page => page.id)))
+    lastSelectedIndex.current = null
+  }
+
   function batch(action: 'rotate' | 'grayscale' | 'duplicate' | 'delete') {
     const ids = [...selectedIds]
     if (action === 'rotate') dispatch({ type: 'ROTATE', ids })
@@ -295,7 +300,7 @@ export default function App() {
         {message && <div className="notice" role="alert">{t(message.key, message.variables)}<button onClick={() => setMessage(null)}>×</button></div>}
         {importing && <div className="import-progress" role="status"><span>{progress}</span><button onClick={cancelImport}>{t('cancel')}</button></div>}
         {pages.length > 0 && <div className="document-toolbar">
-          <div><button onClick={() => setSelectedIds(selectedIds.size === pages.length ? new Set() : new Set(pages.map(page => page.id)))}>{t(selectedIds.size === pages.length ? 'clearSelection' : 'selectAll')}</button><span>{selectedIds.size ? t('selected', { count: selectedIds.size }) : t('selectBatch')}</span></div>
+          <div><button onClick={() => setSelectedIds(selectedIds.size === pages.length ? new Set() : new Set(pages.map(page => page.id)))}>{t(selectedIds.size === pages.length ? 'clearSelection' : 'selectAll')}</button><button onClick={invertSelection}><RefreshCw size={14} /> {t('invertSelection')}</button><span>{selectedIds.size ? t('selected', { count: selectedIds.size }) : t('selectBatch')}</span></div>
           {selectedIds.size > 0 && <div className="batch-actions"><button onClick={() => batch('rotate')}><RotateCw size={14} /> {t('rotate')}</button><button onClick={() => batch('grayscale')}><ImageIcon size={14} /> {t('grayscale')}</button><button onClick={() => batch('duplicate')}><Files size={14} /> {t('duplicate')}</button><button className="danger" onClick={() => batch('delete')}><Trash2 size={14} /> {t('delete')}</button></div>}
           <div className="grid-picker" aria-label={t('thumbnailSize')}>{(['small', 'medium', 'large'] as const).map(size => <button key={size} className={gridSize === size ? 'active' : ''} onClick={() => setGridSize(size)} title={t(size === 'small' ? 'smallThumbs' : size === 'medium' ? 'mediumThumbs' : 'largeThumbs')}>{size === 'small' ? <Grid3X3 size={15} /> : size === 'medium' ? <Grid2X2 size={15} /> : <ImageIcon size={15} />}</button>)}</div>
         </div>}
