@@ -21,6 +21,14 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Local Docker and Traefik state
+docker-compose.override.yml
+docker-compose.override.yaml
+compose.override.yml
+compose.override.yaml
+acme.json
+.docker/
+
 # Editor and operating-system files
 .vscode/
 .idea/
