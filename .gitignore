@@ -6,6 +6,13 @@ dist/
 coverage/
 .vite/
 *.tsbuildinfo
+vite.config.*.timestamp-*
+
+# Tool caches
+.eslintcache
+.cache/
+.npm/
+.pnpm-store/
 
 # Local environment files
 .env
@@ -16,6 +23,7 @@ coverage/
 *.log
 *.tmp
 *.temp
+*.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
