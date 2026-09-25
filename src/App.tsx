@@ -100,7 +100,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    document.title = appConfig.branding.name
+    document.title = `${appConfig.branding.name} - ${appConfig.branding.tagline[locale]}`
     const description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
     if (description) description.content = appConfig.branding.description[locale]
   }, [locale])

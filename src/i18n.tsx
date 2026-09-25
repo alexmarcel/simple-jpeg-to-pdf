@@ -6,7 +6,7 @@ export type Locale = 'en' | 'ms-MY'
 type Variables = Record<string, string | number>
 
 const en = {
-  private: 'Private by design', filesStay: 'Files stay on this device', language: 'Language', pdfMaker: 'PDF maker', undo: 'Undo', redo: 'Redo', clear: 'Clear', addFiles: 'Add files',
+  private: 'Private by design', filesStay: 'Files stay on this device', language: 'Language', pdfMaker: 'ROSES PDF', undo: 'Undo', redo: 'Redo', clear: 'Clear', addFiles: 'Add files',
   dropAnywhere: 'Drop your files anywhere', yourDocument: 'Your document', arrangePages: 'Arrange your pages', buildPdf: 'Create your PDF in 3 steps',
   arrangeHelp: 'Select, edit, and drag pages into place.', emptyHelp: 'Add files, arrange and edit, then export your PDF.', tutorialAdd: 'Add files', tutorialArrange: 'Arrange and edit', tutorialExport: 'Export your PDF', featureTitle: 'Features', featureCombine: 'Combine images and PDF files', featureArrange: 'Reorder, rotate, copy, or remove pages', featureCustomize: 'Add text and images to any page', featurePrivate: 'Work privately in your browser', page: 'page', pages: 'pages',
   selectAll: 'Select all', clearSelection: 'Clear selection', selected: '{count} selected', selectBatch: 'Select pages for batch actions', rotate: 'Rotate', grayscale: 'Grayscale', duplicate: 'Duplicate', delete: 'Delete',
@@ -24,7 +24,7 @@ const en = {
 } as const
 
 const ms: Record<keyof typeof en, string> = {
-  private: 'Privasi terbina dalam', filesStay: 'Fail kekal pada peranti ini', language: 'Bahasa', pdfMaker: 'Pembina PDF', undo: 'Buat asal', redo: 'Buat semula', clear: 'Kosongkan', addFiles: 'Tambah fail',
+  private: 'Privasi terbina dalam', filesStay: 'Fail kekal pada peranti ini', language: 'Bahasa', pdfMaker: 'ROSES PDF', undo: 'Buat asal', redo: 'Buat semula', clear: 'Kosongkan', addFiles: 'Tambah fail',
   dropAnywhere: 'Lepaskan fail anda di mana-mana', yourDocument: 'Dokumen anda', arrangePages: 'Susun halaman anda', buildPdf: 'Edit PDF anda dalam 3 langkah',
   arrangeHelp: 'Pilih, sunting dan seret halaman ke tempatnya.', emptyHelp: 'Tambah fail, susun dan sunting, kemudian eksport PDF anda.', tutorialAdd: 'Tambah fail', tutorialArrange: 'Susun dan sunting', tutorialExport: 'Eksport PDF anda', featureTitle: 'Ciri-ciri', featureCombine: 'Gabungkan imej dan fail PDF', featureArrange: 'Susun, putar, salin atau buang halaman', featureCustomize: 'Tambah teks dan imej pada mana-mana halaman', featurePrivate: 'Edit secara peribadi dalam pelayar anda', page: 'halaman', pages: 'halaman',
   selectAll: 'Pilih semua', clearSelection: 'Kosongkan pilihan', selected: '{count} dipilih', selectBatch: 'Pilih halaman untuk tindakan pukal', rotate: 'Putar', grayscale: 'Skala kelabu', duplicate: 'Duplikasi', delete: 'Padam',

@@ -1,5 +1,5 @@
 /**
- * Public deployment configuration for Pagecraft.
+ * Public deployment configuration for ROSES PDF.
  *
  * Edit this file, run `npm run build`, and redeploy `dist/` to apply changes.
  * Never place passwords, API keys, tokens, or other secrets here: everything in
@@ -39,10 +39,10 @@ export interface AppConfig {
 const appConfig = {
   version: '1.0.0',
   branding: {
-    name: 'EditPDF',
+    name: 'ROSES PDF',
     tagline: {
-      en: 'PDF maker',
-      'ms-MY': 'Pembina PDF',
+      en: 'Resize, Organize, Split, Edit, Share PDF',
+      'ms-MY': 'Resize, Organize, Split, Edit, Share PDF',
     },
     description: {
       en: 'Create and edit PDF documents privately in your browser.',
@@ -51,7 +51,7 @@ const appConfig = {
   },
   defaultLocale: 'ms-MY',
   exportDefaults: {
-    filename: 'bikinPDF-document',
+    filename: 'roses-pdf-document',
     pageMode: 'original',
     orientation: 'auto',
     margin: 'normal',

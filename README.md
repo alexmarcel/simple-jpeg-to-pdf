@@ -1,6 +1,6 @@
-# Pagecraft
+# ROSES PDF
 
-Pagecraft is a privacy-focused browser application for combining images and PDF files into one polished PDF. Arrange pages, add text and image overlays, preview the result, and export without uploading document contents to an application server.
+ROSES PDF is a privacy-focused browser application for resizing, organizing, splitting, editing, and sharing PDF documents. Combine images and PDF files into one polished PDF, arrange pages, add text and image overlays, preview the result, and export without uploading document contents to an application server.
 
 ## Features
 
@@ -73,7 +73,7 @@ To change deployment settings:
 
 Configuration changes do not modify an already deployed build; the application must be rebuilt and redeployed. The configuration is bundled into public browser JavaScript, so never place passwords, tokens, API keys, credentials, or other secrets in it. There is no runtime settings page, administrator login, backend, or database.
 
-## Using Pagecraft
+## Using ROSES PDF
 
 1. Drop JPEG, PNG, or PDF files onto the import area, or select **Add files**.
 2. Drag page cards to arrange the document.
